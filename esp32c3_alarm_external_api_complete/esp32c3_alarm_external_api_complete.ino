@@ -456,19 +456,18 @@ void startWiFiConnect() {
     }
   }
 
-  if (!found) {
-    Serial.print("[WiFi] Target SSID not found: ");
-    Serial.println(WIFI_SSID);
-    wifiConnecting = false;
-    return;
-  }
-
   Serial.print("[WiFi] Connecting to ");
   Serial.print(WIFI_SSID);
-  Serial.print(" on CH=");
-  Serial.println(targetChannel);
 
-  WiFi.begin(WIFI_SSID, WIFI_PASS, targetChannel);
+  if (found) {
+    Serial.print(" on CH=");
+    Serial.println(targetChannel);
+    WiFi.begin(WIFI_SSID, WIFI_PASS, targetChannel);
+  } else {
+    Serial.println(" without scan match");
+    Serial.println("[WiFi] Scan did not see target SSID. Trying direct connect anyway.");
+    WiFi.begin(WIFI_SSID, WIFI_PASS);
+  }
 
   wifiConnecting = true;
   wifiConnectStartMs = millis();
