@@ -111,8 +111,8 @@
 // ============================================================
 
 // Wi-Fi
-const char* WIFI_SSID = "AndroidAP";
-const char* WIFI_PASS = "123456789";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
 // 每一台裝置都要不同 ID。
 // 例如第二台改成 alarm_c3_002，第三台改成 alarm_c3_003。
