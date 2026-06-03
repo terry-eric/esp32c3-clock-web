@@ -428,6 +428,7 @@ void startWiFiConnect() {
 
   WiFi.mode(WIFI_STA);
   WiFi.setSleep(false);
+  WiFi.setAutoReconnect(true);
 
   // 清掉舊狀態，避免 sta is connecting 重複錯誤
   WiFi.disconnect(false, false);
@@ -460,14 +461,16 @@ void startWiFiConnect() {
   Serial.print(WIFI_SSID);
 
   if (found) {
-    Serial.print(" on CH=");
-    Serial.println(targetChannel);
-    WiFi.begin(WIFI_SSID, WIFI_PASS, targetChannel);
+    Serial.print(" (scan saw CH=");
+    Serial.print(targetChannel);
+    Serial.println(")");
   } else {
     Serial.println(" without scan match");
     Serial.println("[WiFi] Scan did not see target SSID. Trying direct connect anyway.");
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
   }
+
+  WiFi.scanDelete();
+  WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   wifiConnecting = true;
   wifiConnectStartMs = millis();
@@ -518,6 +521,8 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
 
   Serial.println();
   Serial.println("[WiFi] Initial connect failed");
+  Serial.print("[WiFi] Final status code = ");
+  Serial.println(WiFi.status());
   return false;
 }
 
