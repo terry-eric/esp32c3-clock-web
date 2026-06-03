@@ -423,6 +423,19 @@ bool isRepeatDayAllowed(int wday) {
 // Wi-Fi
 // ============================================================
 
+String wifiStatusToString(wl_status_t status) {
+  switch (status) {
+    case WL_IDLE_STATUS: return "WL_IDLE_STATUS";
+    case WL_NO_SSID_AVAIL: return "WL_NO_SSID_AVAIL";
+    case WL_SCAN_COMPLETED: return "WL_SCAN_COMPLETED";
+    case WL_CONNECTED: return "WL_CONNECTED";
+    case WL_CONNECT_FAILED: return "WL_CONNECT_FAILED";
+    case WL_CONNECTION_LOST: return "WL_CONNECTION_LOST";
+    case WL_DISCONNECTED: return "WL_DISCONNECTED";
+    default: return "WL_UNKNOWN";
+  }
+}
+
 void startWiFiConnect() {
   Serial.println("[WiFi] Preparing connection...");
 
@@ -489,6 +502,11 @@ void maintainWiFi() {
     }
 
     Serial.println("[WiFi] Connect timeout, disconnect first");
+    Serial.print("[WiFi] Timeout status = ");
+    Serial.print(WiFi.status());
+    Serial.print(" (");
+    Serial.print(wifiStatusToString(WiFi.status()));
+    Serial.println(")");
     WiFi.disconnect(false, false);
     wifiConnecting = false;
     lastWifiTryMs = millis();
@@ -503,6 +521,7 @@ void maintainWiFi() {
 
 bool waitWiFiConnected(unsigned long timeoutMs) {
   unsigned long startMs = millis();
+  unsigned long lastStatusPrintMs = 0;
 
   while (millis() - startMs < timeoutMs) {
     if (WiFi.status() == WL_CONNECTED) {
@@ -515,14 +534,25 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
       return true;
     }
 
-    Serial.print(".");
+    if (millis() - lastStatusPrintMs >= 1000) {
+      lastStatusPrintMs = millis();
+      Serial.print("[WiFi] Waiting, status=");
+      Serial.print(WiFi.status());
+      Serial.print(" (");
+      Serial.print(wifiStatusToString(WiFi.status()));
+      Serial.println(")");
+    }
+
     delay(400);
   }
 
   Serial.println();
   Serial.println("[WiFi] Initial connect failed");
   Serial.print("[WiFi] Final status code = ");
-  Serial.println(WiFi.status());
+  Serial.print(WiFi.status());
+  Serial.print(" (");
+  Serial.print(wifiStatusToString(WiFi.status()));
+  Serial.println(")");
   return false;
 }
 
