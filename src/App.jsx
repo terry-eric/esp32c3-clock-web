@@ -319,6 +319,7 @@ export default function App() {
               <TextField label="Device ID" value={deviceId} onChange={setDeviceId} />
             </div>
             <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-300">
+              <p>MCU POST {base}/sync</p>
               <p>MCU GET {base}/clock?device_id={deviceId}</p>
               <p>MCU POST {base}/state</p>
               <p>WEB GET {base}/web/status</p>

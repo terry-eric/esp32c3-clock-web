@@ -34,9 +34,12 @@ wrangler.toml                         Cloudflare Pages 設定
 MCU 使用：
 
 ```text
+POST /api/sync
 GET  /api/clock?device_id=alarm_c3_001
 POST /api/state
 ```
+
+New firmware uses `POST /api/sync` first: one request uploads status and receives config/commands. `/api/clock` and `/api/state` remain for older firmware.
 
 Web 使用：
 
@@ -135,6 +138,7 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
 #define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
+#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
 #define ALARM_API_TOKEN "same-as-cloudflare-DEVICE_TOKEN"
 ```
 

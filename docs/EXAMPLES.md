@@ -59,6 +59,10 @@ esp32c3_alarm_external_api_complete/arduino_secrets.h
 
 #define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
 #define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
+#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
+
+#define ALARM_WIFI_SLEEP true
+#define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
 
 #define ALARM_API_TOKEN "replace-with-cloudflare-DEVICE_TOKEN"
 #define ALARM_HTTPS_INSECURE true
@@ -91,6 +95,14 @@ Health：
 
 ```bash
 curl https://esp32c3-clock-web.pages.dev/api/health
+```
+
+MCU sync, preferred for new firmware:
+```bash
+curl -X POST "https://esp32c3-clock-web.pages.dev/api/sync" \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
+  -d "{\"deviceId\":\"alarm_c3_001\",\"online\":true,\"state\":\"IDLE\",\"heap\":200000}"
 ```
 
 讀 MCU config：

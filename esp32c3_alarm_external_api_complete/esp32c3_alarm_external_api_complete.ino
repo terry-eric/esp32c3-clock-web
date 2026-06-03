@@ -126,6 +126,16 @@
 const char* WIFI_SSID = ALARM_WIFI_SSID;
 const char* WIFI_PASS = ALARM_WIFI_PASS;
 
+#ifndef ALARM_WIFI_SLEEP
+#define ALARM_WIFI_SLEEP true
+#endif
+
+#ifndef ALARM_WIFI_TX_POWER
+#define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
+#endif
+
+const bool WIFI_SLEEP = ALARM_WIFI_SLEEP;
+
 // 每一台裝置都要不同 ID。
 // 例如第二台改成 alarm_c3_002，第三台改成 alarm_c3_003。
 #ifndef ALARM_DEVICE_ID
@@ -144,8 +154,13 @@ const char* DEVICE_ID = ALARM_DEVICE_ID;
 #define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 #endif
 
+#ifndef ALARM_SYNC_URL
+#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
+#endif
+
 const char* CONFIG_URL_BASE = ALARM_CONFIG_URL_BASE;
 const char* STATUS_URL      = ALARM_STATUS_URL;
+const char* SYNC_URL        = ALARM_SYNC_URL;
 
 // 可選：如果網站需要簡單 token 驗證，就填入 token。
 // 不需要就保持空字串。
@@ -187,10 +202,10 @@ const bool TOUCH_ACTIVE_HIGH = false;
 // Timing settings
 // ============================================================
 
-const unsigned long WIFI_CONNECT_TIMEOUT_MS       = 20000;
-const unsigned long WIFI_RETRY_INTERVAL_MS        = 30000;
-const unsigned long CONFIG_SYNC_INTERVAL_MS       = 30000;
-const unsigned long STATUS_POST_INTERVAL_MS       = 30000;
+const unsigned long WIFI_CONNECT_TIMEOUT_MS       = 12000;
+const unsigned long WIFI_RETRY_INTERVAL_MS        = 60000;
+const unsigned long WIFI_RETRY_MAX_INTERVAL_MS    = 300000;
+const unsigned long SYNC_INTERVAL_MS              = 60000;
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
 
 const unsigned long BUTTON_DEBOUNCE_MS            = 35;
@@ -252,9 +267,9 @@ bool timeOK = false;
 bool wifiConnecting = false;
 unsigned long wifiConnectStartMs = 0;
 unsigned long lastWifiTryMs = 0;
+uint8_t wifiFailCount = 0;
 
-unsigned long lastConfigSyncMs = 0;
-unsigned long lastStatusPostMs = 0;
+unsigned long lastSyncMs = 0;
 unsigned long lastHeartbeatPrintMs = 0;
 
 unsigned long stateEnterMs = 0;
@@ -436,53 +451,64 @@ String wifiStatusToString(wl_status_t status) {
   }
 }
 
+void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
+  switch (event) {
+    case ARDUINO_EVENT_WIFI_STA_START:
+      Serial.println("[WiFiEvent] STA_START");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      Serial.println("[WiFiEvent] STA_CONNECTED");
+      break;
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+      Serial.print("[WiFiEvent] GOT_IP ");
+      Serial.println(WiFi.localIP());
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      Serial.print("[WiFiEvent] STA_DISCONNECTED reason=");
+      Serial.println(info.wifi_sta_disconnected.reason);
+      break;
+    default:
+      break;
+  }
+}
+
+unsigned long currentWifiRetryIntervalMs() {
+  unsigned long interval = WIFI_RETRY_INTERVAL_MS;
+  for (uint8_t i = 0; i < wifiFailCount && interval < WIFI_RETRY_MAX_INTERVAL_MS; i++) {
+    interval *= 2;
+    if (interval > WIFI_RETRY_MAX_INTERVAL_MS) {
+      interval = WIFI_RETRY_MAX_INTERVAL_MS;
+    }
+  }
+  return interval;
+}
+
 void startWiFiConnect() {
   Serial.println("[WiFi] Preparing connection...");
 
+  WiFi.persistent(false);
+  WiFi.disconnect(true, true);
+  WiFi.mode(WIFI_OFF);
+  delay(500);
+
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(false);
-  WiFi.setAutoReconnect(true);
+  WiFi.setSleep(WIFI_SLEEP);
+  WiFi.setTxPower(ALARM_WIFI_TX_POWER);
+  WiFi.setAutoReconnect(false);
+  WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
 
   // 清掉舊狀態，避免 sta is connecting 重複錯誤
-  WiFi.disconnect(false, false);
-  delay(200);
-
-  Serial.println("[WiFi] Scanning target SSID...");
-  int n = WiFi.scanNetworks(false, true);
-
-  bool found = false;
-  int targetChannel = 0;
-
-  if (n <= 0) {
-    Serial.println("[WiFi] No network found");
-  } else {
-    for (int i = 0; i < n; i++) {
-      String ssid = WiFi.SSID(i);
-      int rssi = WiFi.RSSI(i);
-      int ch = WiFi.channel(i);
-
-      Serial.printf("  SSID=\"%s\" RSSI=%d CH=%d\n", ssid.c_str(), rssi, ch);
-
-      if (ssid == WIFI_SSID) {
-        found = true;
-        targetChannel = ch;
-      }
-    }
-  }
-
   Serial.print("[WiFi] Connecting to ");
   Serial.print(WIFI_SSID);
+  Serial.println(" using direct connect");
+  Serial.print("[WiFi] Sleep = ");
+  Serial.println(WIFI_SLEEP ? "ON" : "OFF");
+  Serial.print("[WiFi] Retry wait after failure = ");
+  Serial.print(currentWifiRetryIntervalMs() / 1000);
+  Serial.println(" sec");
+  Serial.print("[WiFi] Password length = ");
+  Serial.println(strlen(WIFI_PASS));
 
-  if (found) {
-    Serial.print(" (scan saw CH=");
-    Serial.print(targetChannel);
-    Serial.println(")");
-  } else {
-    Serial.println(" without scan match");
-    Serial.println("[WiFi] Scan did not see target SSID. Trying direct connect anyway.");
-  }
-
-  WiFi.scanDelete();
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   wifiConnecting = true;
@@ -493,6 +519,7 @@ void startWiFiConnect() {
 void maintainWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnecting = false;
+    wifiFailCount = 0;
     return;
   }
 
@@ -509,11 +536,14 @@ void maintainWiFi() {
     Serial.println(")");
     WiFi.disconnect(false, false);
     wifiConnecting = false;
+    if (wifiFailCount < 5) {
+      wifiFailCount++;
+    }
     lastWifiTryMs = millis();
     return;
   }
 
-  if (millis() - lastWifiTryMs >= WIFI_RETRY_INTERVAL_MS) {
+  if (millis() - lastWifiTryMs >= currentWifiRetryIntervalMs()) {
     lastWifiTryMs = millis();
     startWiFiConnect();
   }
@@ -531,6 +561,7 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
       Serial.println("[WiFi] Connected!");
       Serial.print("[WiFi] IP = ");
       Serial.println(WiFi.localIP());
+      wifiFailCount = 0;
       return true;
     }
 
@@ -553,6 +584,9 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
   Serial.print(" (");
   Serial.print(wifiStatusToString(WiFi.status()));
   Serial.println(")");
+  if (wifiFailCount < 5) {
+    wifiFailCount++;
+  }
   return false;
 }
 
@@ -777,6 +811,56 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
 // Config sync from website
 // ============================================================
 
+bool applyConfigFromJson(JsonVariantConst doc) {
+  // Optional: confirm deviceId if the server provides it.
+  const char* returnedDeviceId = doc["deviceId"] | "";
+  if (strlen(returnedDeviceId) > 0 && String(returnedDeviceId) != String(DEVICE_ID)) {
+    Serial.println("[API] deviceId mismatch, ignored");
+    return false;
+  }
+
+  int incomingVersion = doc["version"] | alarmConfig.version;
+
+  alarmConfig.enabled = doc["enabled"] | alarmConfig.enabled;
+  alarmConfig.hour = doc["hour"] | alarmConfig.hour;
+  alarmConfig.minute = doc["minute"] | alarmConfig.minute;
+  alarmConfig.repeatMask = doc["repeatMask"] | alarmConfig.repeatMask;
+  alarmConfig.prealertSec = doc["prealertSec"] | alarmConfig.prealertSec;
+  alarmConfig.snoozeMin = doc["snoozeMin"] | alarmConfig.snoozeMin;
+  alarmConfig.maxRingSec = doc["maxRingSec"] | alarmConfig.maxRingSec;
+  alarmConfig.hapticEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
+  alarmConfig.version = incomingVersion;
+
+  alarmConfig.hour = constrain(alarmConfig.hour, 0, 23);
+  alarmConfig.minute = constrain(alarmConfig.minute, 0, 59);
+  alarmConfig.repeatMask = constrain(alarmConfig.repeatMask, 0, 127);
+  alarmConfig.prealertSec = constrain(alarmConfig.prealertSec, 0, 3600);
+  alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 1, 60);
+  alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 10, 3600);
+  alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 1, 123);
+
+  saveConfigToNVS();
+
+  Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d version=%d\n",
+                alarmConfig.enabled,
+                alarmConfig.hour,
+                alarmConfig.minute,
+                alarmConfig.repeatMask,
+                alarmConfig.prealertSec,
+                alarmConfig.snoozeMin,
+                alarmConfig.maxRingSec,
+                alarmConfig.hapticEffect,
+                alarmConfig.version);
+
+  int commandId = doc["commandId"] | 0;
+  const char* commandCstr = doc["command"] | "none";
+  int commandEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
+
+  executeCommand(commandId, String(commandCstr), commandEffect);
+
+  return true;
+}
+
 bool syncConfigFromServer() {
   if (WiFi.status() != WL_CONNECTED) {
     return false;
@@ -819,77 +903,14 @@ bool syncConfigFromServer() {
     return false;
   }
 
-  // Optional: confirm deviceId if the server provides it.
-  const char* returnedDeviceId = doc["deviceId"] | "";
-  if (strlen(returnedDeviceId) > 0 && String(returnedDeviceId) != String(DEVICE_ID)) {
-    Serial.println("[API] deviceId mismatch, ignored");
-    return false;
-  }
-
-  int incomingVersion = doc["version"] | alarmConfig.version;
-
-  alarmConfig.enabled = doc["enabled"] | alarmConfig.enabled;
-  alarmConfig.hour = doc["hour"] | alarmConfig.hour;
-  alarmConfig.minute = doc["minute"] | alarmConfig.minute;
-  alarmConfig.repeatMask = doc["repeatMask"] | alarmConfig.repeatMask;
-  alarmConfig.prealertSec = doc["prealertSec"] | alarmConfig.prealertSec;
-  alarmConfig.snoozeMin = doc["snoozeMin"] | alarmConfig.snoozeMin;
-  alarmConfig.maxRingSec = doc["maxRingSec"] | alarmConfig.maxRingSec;
-  alarmConfig.hapticEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
-  alarmConfig.version = incomingVersion;
-
-  alarmConfig.hour = constrain(alarmConfig.hour, 0, 23);
-  alarmConfig.minute = constrain(alarmConfig.minute, 0, 59);
-  alarmConfig.repeatMask = constrain(alarmConfig.repeatMask, 0, 127);
-  alarmConfig.prealertSec = constrain(alarmConfig.prealertSec, 0, 3600);
-  alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 1, 60);
-  alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 10, 3600);
-  alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 1, 123);
-
-  saveConfigToNVS();
-
-  Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d version=%d\n",
-                alarmConfig.enabled,
-                alarmConfig.hour,
-                alarmConfig.minute,
-                alarmConfig.repeatMask,
-                alarmConfig.prealertSec,
-                alarmConfig.snoozeMin,
-                alarmConfig.maxRingSec,
-                alarmConfig.hapticEffect,
-                alarmConfig.version);
-
-  // Command fields can be top-level.
-  int commandId = doc["commandId"] | 0;
-  const char* commandCstr = doc["command"] | "none";
-  int commandEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
-
-  executeCommand(commandId, String(commandCstr), commandEffect);
-
-  return true;
+  return applyConfigFromJson(doc.as<JsonVariantConst>());
 }
 
 // ============================================================
 // Status POST to website
 // ============================================================
 
-bool postStatusToServer() {
-  if (WiFi.status() != WL_CONNECTED) {
-    return false;
-  }
-
-  HTTPClient http;
-
-  if (!httpBeginSmart(http, String(STATUS_URL))) {
-    Serial.println("[API] status http.begin failed");
-    return false;
-  }
-
-  http.setTimeout(7000);
-  addCommonHeaders(http);
-
-  StaticJsonDocument<768> doc;
-
+void fillStatusJson(JsonDocument& doc) {
   doc["deviceId"] = DEVICE_ID;
   doc["online"] = true;
   doc["state"] = stateToString(stateNow);
@@ -919,6 +940,25 @@ bool postStatusToServer() {
   doc["lastAction"] = lastAction;
   doc["lastCommandId"] = lastCommandId;
   doc["heap"] = ESP.getFreeHeap();
+}
+
+bool postStatusToServer() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  HTTPClient http;
+
+  if (!httpBeginSmart(http, String(STATUS_URL))) {
+    Serial.println("[API] status http.begin failed");
+    return false;
+  }
+
+  http.setTimeout(7000);
+  addCommonHeaders(http);
+
+  StaticJsonDocument<768> doc;
+  fillStatusJson(doc);
 
   String body;
   serializeJson(doc, body);
@@ -932,6 +972,68 @@ bool postStatusToServer() {
   Serial.printf("[API] Status POST code=%d\n", code);
 
   return code >= 200 && code < 300;
+}
+
+bool syncWithServer() {
+  if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  HTTPClient http;
+
+  Serial.print("[API] POST sync: ");
+  Serial.println(SYNC_URL);
+
+  if (!httpBeginSmart(http, String(SYNC_URL))) {
+    Serial.println("[API] sync http.begin failed");
+    return false;
+  }
+
+  http.setTimeout(7000);
+  addCommonHeaders(http);
+
+  StaticJsonDocument<768> statusDoc;
+  fillStatusJson(statusDoc);
+
+  String body;
+  serializeJson(statusDoc, body);
+
+  int code = http.POST(body);
+  String payload = http.getString();
+  http.end();
+
+  Serial.printf("[API] Sync code=%d\n", code);
+
+  if (code < 200 || code >= 300) {
+    if (payload.length() > 0) {
+      Serial.print("[API] Sync error payload: ");
+      Serial.println(payload);
+    }
+    return false;
+  }
+
+  if (payload.length() == 0) {
+    return true;
+  }
+
+  Serial.print("[API] Sync payload: ");
+  Serial.println(payload);
+
+  StaticJsonDocument<1024> responseDoc;
+  DeserializationError err = deserializeJson(responseDoc, payload);
+
+  if (err) {
+    Serial.print("[API] Sync JSON parse error: ");
+    Serial.println(err.c_str());
+    return false;
+  }
+
+  JsonVariantConst config = responseDoc["config"].as<JsonVariantConst>();
+  if (config.isNull()) {
+    config = responseDoc.as<JsonVariantConst>();
+  }
+
+  return applyConfigFromJson(config);
 }
 
 // ============================================================
@@ -1226,6 +1328,8 @@ void setup() {
   Serial.println(" ESP32-C3 Super Mini Alarm - External API Version");
   Serial.println("======================================================");
 
+  WiFi.onEvent(onWiFiEvent);
+
   pinMode(PIN_LED_A, OUTPUT);
   pinMode(PIN_LED_B, OUTPUT);
   pinMode(PIN_LED_FLASH, OUTPUT);
@@ -1246,12 +1350,10 @@ void setup() {
 
   if (WiFi.status() == WL_CONNECTED) {
     setupTimeNTP();
-    syncConfigFromServer();
-    postStatusToServer();
+    syncWithServer();
   }
 
-  lastConfigSyncMs = millis();
-  lastStatusPostMs = millis();
+  lastSyncMs = millis();
 
   if (!timeOK) {
     enterState(STATE_TIME_INVALID);
@@ -1274,14 +1376,9 @@ void loop() {
   updateAlarmEngine();
   updateLedPattern();
 
-  if (WiFi.status() == WL_CONNECTED && millis() - lastConfigSyncMs >= CONFIG_SYNC_INTERVAL_MS) {
-    lastConfigSyncMs = millis();
-    syncConfigFromServer();
-  }
-
-  if (WiFi.status() == WL_CONNECTED && millis() - lastStatusPostMs >= STATUS_POST_INTERVAL_MS) {
-    lastStatusPostMs = millis();
-    postStatusToServer();
+  if (WiFi.status() == WL_CONNECTED && millis() - lastSyncMs >= SYNC_INTERVAL_MS) {
+    lastSyncMs = millis();
+    syncWithServer();
   }
 
   printHeartbeat();

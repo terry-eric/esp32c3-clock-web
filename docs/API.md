@@ -22,6 +22,55 @@ Web 管理端不要把 `DEVICE_TOKEN` 放進前端。正式環境建議用 Cloud
 
 ## MCU Endpoints
 
+### POST `/api/sync`
+
+Preferred endpoint for new firmware. The MCU uploads its current status and receives the latest config/command in the same response. This reduces Cloudflare Function, KV, WiFi, and battery usage.
+
+Body:
+
+```json
+{
+  "deviceId": "alarm_c3_001",
+  "online": true,
+  "state": "IDLE",
+  "wifiOk": true,
+  "wifiRssi": -56,
+  "ip": "192.168.43.20",
+  "timeOk": true,
+  "time": "2026-06-03 15:03:23",
+  "drvOk": true,
+  "alarmEnabled": true,
+  "alarmTime": "07:30",
+  "repeatMask": 62,
+  "lastAction": "STOPPED",
+  "configVersion": 1,
+  "lastCommandId": 0,
+  "heap": 197812
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "config": {
+    "deviceId": "alarm_c3_001",
+    "enabled": true,
+    "hour": 7,
+    "minute": 30,
+    "repeatMask": 62,
+    "prealertSec": 60,
+    "snoozeMin": 5,
+    "maxRingSec": 300,
+    "hapticEffect": 17,
+    "version": 1,
+    "commandId": 0,
+    "command": "none"
+  }
+}
+```
+
 ### GET `/api/clock`
 
 MCU 取得設定與待執行指令。

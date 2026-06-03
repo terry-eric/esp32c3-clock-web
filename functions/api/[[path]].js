@@ -126,6 +126,28 @@ async function getStatus(env, deviceId) {
   return readJson(env, `status:${deviceId}`, defaultStatus(deviceId));
 }
 
+async function storeStatus(env, request, body, url) {
+  const source = body && typeof body.status === 'object' && body.status !== null
+    ? body.status
+    : body;
+  const deviceId = String(
+    source.deviceId ||
+    body.deviceId ||
+    url.searchParams.get('device_id') ||
+    request.headers.get('X-Device-Id') ||
+    defaultDeviceId
+  );
+  const status = {
+    ...source,
+    deviceId,
+    online: true,
+    lastSeen: new Date().toISOString()
+  };
+
+  await writeJson(env, `status:${deviceId}`, status);
+  return { deviceId, status };
+}
+
 async function readBody(request) {
   try {
     return await request.json();
@@ -147,7 +169,7 @@ async function handleRequest(context) {
     });
   }
 
-  const isMcuEndpoint = path === '/clock' || path === '/state';
+  const isMcuEndpoint = path === '/clock' || path === '/state' || path === '/sync';
   const isWebEndpoint = path.startsWith('/web/');
 
   if (isMcuEndpoint && !hasToken(request, env.DEVICE_TOKEN || '')) {
@@ -165,16 +187,16 @@ async function handleRequest(context) {
 
   if (path === '/state' && request.method === 'POST') {
     const body = await readBody(request);
-    const deviceId = String(body.deviceId || request.headers.get('X-Device-Id') || defaultDeviceId);
-    const status = {
-      ...body,
-      deviceId,
-      online: true,
-      lastSeen: new Date().toISOString()
-    };
-
-    await writeJson(env, `status:${deviceId}`, status);
+    await storeStatus(env, request, body, url);
     return json({ success: true });
+  }
+
+  if (path === '/sync' && request.method === 'POST') {
+    const body = await readBody(request);
+    const { deviceId } = await storeStatus(env, request, body, url);
+    const config = await getConfig(env, deviceId);
+
+    return json({ success: true, config });
   }
 
   if (path === '/web/status' && request.method === 'GET') {

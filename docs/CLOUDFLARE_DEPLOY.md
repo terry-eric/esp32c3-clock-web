@@ -73,7 +73,7 @@ DEVICE_TOKEN=<給 MCU 用的強密碼或隨機 token>
 REQUIRE_CF_ACCESS=true
 ```
 
-`DEVICE_TOKEN` 是 MCU 呼叫 `/api/clock` 和 `/api/state` 用的。Web UI 不需要知道這個值。
+`DEVICE_TOKEN` 是 MCU 呼叫 `/api/sync`、`/api/clock` 和 `/api/state` 用的。Web UI 不需要知道這個值。
 
 ## 4. 設定 Cloudflare Access
 
@@ -88,7 +88,7 @@ Path: /api/web/*
 
 允許你的 email 登入。
 
-不要只設定 `Path: /*` 然後把整個站都擋住，除非你另外排除 MCU API。MCU 不能互動登入 Access，因此 `/api/clock` 和 `/api/state` 要靠 `DEVICE_TOKEN` 保護。
+不要只設定 `Path: /*` 然後把整個站都擋住，除非你另外排除 MCU API。MCU 不能互動登入 Access，因此 `/api/sync`、`/api/clock` 和 `/api/state` 要靠 `DEVICE_TOKEN` 保護。
 
 ## 5. MCU 設定
 
@@ -105,6 +105,7 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
 #define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
+#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
 #define ALARM_API_TOKEN "same-as-cloudflare-DEVICE_TOKEN"
 ```
 
@@ -139,6 +140,15 @@ MCU config：
 
 ```bash
 curl -H "X-Device-Token: <DEVICE_TOKEN>" "https://esp32c3-clock-web.pages.dev/api/clock?device_id=alarm_c3_001"
+```
+
+MCU sync，新版韌體建議先測這支：
+
+```bash
+curl -X POST "https://esp32c3-clock-web.pages.dev/api/sync" \
+  -H "Content-Type: application/json" \
+  -H "X-Device-Token: <DEVICE_TOKEN>" \
+  -d "{\"deviceId\":\"alarm_c3_001\",\"state\":\"IDLE\",\"online\":true}"
 ```
 
 MCU status：

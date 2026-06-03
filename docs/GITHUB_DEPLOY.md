@@ -75,6 +75,7 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #define ALARM_CONFIG_URL_BASE "https://你的-pages-domain.pages.dev/api/clock"
 #define ALARM_STATUS_URL "https://你的-pages-domain.pages.dev/api/state"
+#define ALARM_SYNC_URL "https://你的-pages-domain.pages.dev/api/sync"
 #define ALARM_API_TOKEN "與 Cloudflare DEVICE_TOKEN 相同"
 ```
 
@@ -93,6 +94,7 @@ POST /api/web/command
 MCU 端：
 
 ```text
+POST /api/sync
 GET /api/clock
 POST /api/state
 ```
