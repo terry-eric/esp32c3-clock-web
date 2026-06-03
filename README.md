@@ -79,6 +79,12 @@ npm run dev
 https://github.com/terry-eric/esp32c3-clock-web
 ```
 
+Cloudflare Pages URL:
+
+```text
+https://esp32c3-clock-web.pages.dev
+```
+
 2. 設定 build：
 
 ```text
@@ -127,8 +133,8 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 ```cpp
 #define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
-#define ALARM_CONFIG_URL_BASE "https://your-pages-domain.pages.dev/api/clock"
-#define ALARM_STATUS_URL "https://your-pages-domain.pages.dev/api/state"
+#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
+#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 #define ALARM_API_TOKEN "same-as-cloudflare-DEVICE_TOKEN"
 ```
 

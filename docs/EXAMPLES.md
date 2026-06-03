@@ -32,7 +32,7 @@ REQUIRE_CF_ACCESS=true
 
 ```text
 Application type: Self-hosted
-Application domain: your-pages-domain.pages.dev
+Application domain: esp32c3-clock-web.pages.dev
 Path: /api/web/*
 Policy: Allow your email
 ```
@@ -57,8 +57,8 @@ esp32c3_alarm_external_api_complete/arduino_secrets.h
 
 #define ALARM_DEVICE_ID "alarm_c3_001"
 
-#define ALARM_CONFIG_URL_BASE "https://your-pages-domain.pages.dev/api/clock"
-#define ALARM_STATUS_URL "https://your-pages-domain.pages.dev/api/state"
+#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
+#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 
 #define ALARM_API_TOKEN "replace-with-cloudflare-DEVICE_TOKEN"
 #define ALARM_HTTPS_INSECURE true
@@ -90,20 +90,20 @@ http://localhost:8000
 Health：
 
 ```bash
-curl https://your-pages-domain.pages.dev/api/health
+curl https://esp32c3-clock-web.pages.dev/api/health
 ```
 
 讀 MCU config：
 
 ```bash
 curl -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
-  "https://your-pages-domain.pages.dev/api/clock?device_id=alarm_c3_001"
+  "https://esp32c3-clock-web.pages.dev/api/clock?device_id=alarm_c3_001"
 ```
 
 送 MCU status：
 
 ```bash
-curl -X POST "https://your-pages-domain.pages.dev/api/state" \
+curl -X POST "https://esp32c3-clock-web.pages.dev/api/state" \
   -H "Content-Type: application/json" \
   -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
   -d "{\"deviceId\":\"alarm_c3_001\",\"online\":true,\"state\":\"IDLE\",\"heap\":200000}"
@@ -112,7 +112,7 @@ curl -X POST "https://your-pages-domain.pages.dev/api/state" \
 送 Web command：
 
 ```bash
-curl -X POST "https://your-pages-domain.pages.dev/api/web/command" \
+curl -X POST "https://esp32c3-clock-web.pages.dev/api/web/command" \
   -H "Content-Type: application/json" \
   -d "{\"deviceId\":\"alarm_c3_001\",\"command\":\"test_haptic\",\"hapticEffect\":17}"
 ```

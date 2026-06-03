@@ -137,11 +137,11 @@ const char* DEVICE_ID = ALARM_DEVICE_ID;
 // 外部網站 API。
 // 先用 http 比較好測試；如果你的網站是 https，也可以直接填 https://...
 #ifndef ALARM_CONFIG_URL_BASE
-#define ALARM_CONFIG_URL_BASE "https://your-cloudflare-pages-domain.pages.dev/api/clock"
+#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
 #endif
 
 #ifndef ALARM_STATUS_URL
-#define ALARM_STATUS_URL "https://your-cloudflare-pages-domain.pages.dev/api/state"
+#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 #endif
 
 const char* CONFIG_URL_BASE = ALARM_CONFIG_URL_BASE;

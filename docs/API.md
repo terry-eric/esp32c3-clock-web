@@ -5,7 +5,7 @@
 建議正式網址：
 
 ```text
-https://your-cloudflare-pages-domain.pages.dev/api
+https://esp32c3-clock-web.pages.dev/api
 ```
 
 Cloudflare Pages 是 HTTPS，因此 API 也必須是 HTTPS。使用同源 `/api` 可以避免 mixed content 與 CORS 問題。

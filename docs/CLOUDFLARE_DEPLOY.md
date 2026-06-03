@@ -82,7 +82,7 @@ REQUIRE_CF_ACCESS=true
 建議先保護 Web 管理 API：
 
 ```text
-Application domain: your-pages-domain.pages.dev
+Application domain: esp32c3-clock-web.pages.dev
 Path: /api/web/*
 ```
 
@@ -103,8 +103,8 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 ```cpp
 #define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
-#define ALARM_CONFIG_URL_BASE "https://your-pages-domain.pages.dev/api/clock"
-#define ALARM_STATUS_URL "https://your-pages-domain.pages.dev/api/state"
+#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
+#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 #define ALARM_API_TOKEN "same-as-cloudflare-DEVICE_TOKEN"
 ```
 
@@ -132,19 +132,19 @@ deviceId
 Health：
 
 ```text
-https://your-pages-domain.pages.dev/api/health
+https://esp32c3-clock-web.pages.dev/api/health
 ```
 
 MCU config：
 
 ```bash
-curl -H "X-Device-Token: <DEVICE_TOKEN>" "https://your-pages-domain.pages.dev/api/clock?device_id=alarm_c3_001"
+curl -H "X-Device-Token: <DEVICE_TOKEN>" "https://esp32c3-clock-web.pages.dev/api/clock?device_id=alarm_c3_001"
 ```
 
 MCU status：
 
 ```bash
-curl -X POST "https://your-pages-domain.pages.dev/api/state" \
+curl -X POST "https://esp32c3-clock-web.pages.dev/api/state" \
   -H "Content-Type: application/json" \
   -H "X-Device-Token: <DEVICE_TOKEN>" \
   -d "{\"deviceId\":\"alarm_c3_001\",\"state\":\"IDLE\",\"online\":true}"
@@ -153,7 +153,7 @@ curl -X POST "https://your-pages-domain.pages.dev/api/state" \
 Web status：
 
 ```text
-https://your-pages-domain.pages.dev/api/web/status?device_id=alarm_c3_001
+https://esp32c3-clock-web.pages.dev/api/web/status?device_id=alarm_c3_001
 ```
 
 若 `REQUIRE_CF_ACCESS=true`，瀏覽器必須先通過 Cloudflare Access。
