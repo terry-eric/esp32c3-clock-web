@@ -1,8 +1,6 @@
 # Examples
 
-這份文件提供 GitHub repo 使用者可以直接照填的範例。
-
-## Cloudflare Pages 設定範例
+## Cloudflare Pages
 
 ```text
 Project name: esp32c3-clock-web
@@ -12,23 +10,23 @@ Build output directory: dist
 Root directory: /
 ```
 
-## Cloudflare KV Binding 範例
+## Cloudflare KV Binding
 
 ```text
 KV namespace name: esp32_alarm_kv
 Binding variable name: ALARM_KV
 ```
 
-## Cloudflare Variables / Secrets 範例
+## Cloudflare Variables / Secrets
 
 ```text
 DEVICE_TOKEN=replace-with-a-long-random-token
 REQUIRE_CF_ACCESS=true
 ```
 
-`DEVICE_TOKEN` 不要寫進前端，不要 commit 到 GitHub。
+Do not put `DEVICE_TOKEN` in frontend code or commit it to GitHub.
 
-## Cloudflare Access 範例
+## Cloudflare Access
 
 ```text
 Application type: Self-hosted
@@ -37,17 +35,17 @@ Path: /api/web/*
 Policy: Allow your email
 ```
 
-這樣 Web 管理 API 需要登入 Cloudflare Access。MCU API 則使用 `DEVICE_TOKEN`。
+MCU endpoints use `DEVICE_TOKEN`; Web management endpoints use Cloudflare Access.
 
-## Arduino secrets 範例
+## Arduino Secrets
 
-檔案：
+File:
 
 ```text
 esp32c3_alarm_external_api_complete/arduino_secrets.h
 ```
 
-內容：
+Example:
 
 ```cpp
 #pragma once
@@ -61,6 +59,10 @@ esp32c3_alarm_external_api_complete/arduino_secrets.h
 #define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 #define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
 
+#define ALARM_ENABLE_CLOUD_SYNC true
+#define ALARM_ENABLE_LOCAL_API true
+// #define ALARM_LOCAL_API_TOKEN "local-only-token"
+
 #define ALARM_WIFI_SLEEP true
 #define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
 
@@ -68,36 +70,49 @@ esp32c3_alarm_external_api_complete/arduino_secrets.h
 #define ALARM_HTTPS_INSECURE true
 ```
 
-## Web UI 範例
+For no-backend local mode:
 
-部署到 Cloudflare Pages 後：
+```cpp
+#define ALARM_ENABLE_CLOUD_SYNC false
+#define ALARM_ENABLE_LOCAL_API true
+#define ALARM_LOCAL_API_TOKEN "local-only-token"
+```
+
+## Web UI Modes
+
+Cloudflare backend:
 
 ```text
-API Base URL: 留空
+Connection mode: Cloudflare 後端
+Cloudflare API Base URL: blank, or /api
 Device ID: alarm_c3_001
 ```
 
-留空會使用：
+Direct MCU mode:
 
 ```text
-/api
+Connection mode: 直接連 MCU
+MCU Base URL: http://192.168.x.x
+Local API Token: same as ALARM_LOCAL_API_TOKEN, or blank if not set
 ```
 
-若你在本機測試另一個 API，也可以填：
+MCU-hosted mode:
 
 ```text
-http://localhost:8000
+Open: http://192.168.x.x/
+The MCU serves a small built-in local dashboard.
 ```
 
-## curl 測試範例
+## curl Tests
 
-Health：
+Health:
 
 ```bash
 curl https://esp32c3-clock-web.pages.dev/api/health
 ```
 
-MCU sync, preferred for new firmware:
+Cloudflare MCU sync:
+
 ```bash
 curl -X POST "https://esp32c3-clock-web.pages.dev/api/sync" \
   -H "Content-Type: application/json" \
@@ -105,14 +120,14 @@ curl -X POST "https://esp32c3-clock-web.pages.dev/api/sync" \
   -d "{\"deviceId\":\"alarm_c3_001\",\"online\":true,\"state\":\"IDLE\",\"heap\":200000}"
 ```
 
-讀 MCU config：
+Cloudflare MCU config:
 
 ```bash
 curl -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
   "https://esp32c3-clock-web.pages.dev/api/clock?device_id=alarm_c3_001"
 ```
 
-送 MCU status：
+Cloudflare MCU status:
 
 ```bash
 curl -X POST "https://esp32c3-clock-web.pages.dev/api/state" \
@@ -121,7 +136,23 @@ curl -X POST "https://esp32c3-clock-web.pages.dev/api/state" \
   -d "{\"deviceId\":\"alarm_c3_001\",\"online\":true,\"state\":\"IDLE\",\"heap\":200000}"
 ```
 
-送 Web command：
+Local MCU status:
+
+```bash
+curl -H "X-Local-Token: local-only-token" \
+  "http://192.168.x.x/api/local/status"
+```
+
+Local MCU config:
+
+```bash
+curl -X POST "http://192.168.x.x/api/local/config" \
+  -H "Content-Type: application/json" \
+  -H "X-Local-Token: local-only-token" \
+  -d "{\"hour\":7,\"minute\":30,\"enabled\":true,\"repeatMask\":62,\"hapticEffect\":17}"
+```
+
+Web command:
 
 ```bash
 curl -X POST "https://esp32c3-clock-web.pages.dev/api/web/command" \
@@ -129,4 +160,4 @@ curl -X POST "https://esp32c3-clock-web.pages.dev/api/web/command" \
   -d "{\"deviceId\":\"alarm_c3_001\",\"command\":\"test_haptic\",\"hapticEffect\":17}"
 ```
 
-若 `REQUIRE_CF_ACCESS=true`，`/api/web/*` 需要先通過 Cloudflare Access，所以這個 curl 會被擋；請用瀏覽器登入後從 Web UI 操作。
+When `REQUIRE_CF_ACCESS=true`, `/api/web/*` requires Cloudflare Access login, so plain curl may be rejected.

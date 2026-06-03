@@ -11,6 +11,11 @@
 #define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
 #define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
 #define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
+#define ALARM_ENABLE_CLOUD_SYNC true
+
+#define ALARM_ENABLE_LOCAL_API true
+// Leave commented to reuse ALARM_API_TOKEN, or set a different local-only key.
+// #define ALARM_LOCAL_API_TOKEN "replace-with-local-mcu-token"
 
 // Lower power WiFi defaults. Raise TX power if the AP is far away.
 #define ALARM_WIFI_SLEEP true

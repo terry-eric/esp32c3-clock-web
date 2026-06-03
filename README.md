@@ -23,10 +23,29 @@ functions/api/[[path]].js             Cloudflare Pages Functions API
 esp32c3_alarm_external_api_complete/  ESP32-C3 Arduino 韌體
 docs/API.md                           API 規格
 docs/CLOUDFLARE_DEPLOY.md             Cloudflare 架設流程
+docs/DEPLOYMENT_MODES.md              後端/無後端/MCU 自架網站模式
 docs/EXAMPLES.md                      設定與 API 範例
 docs/GITHUB_DEPLOY.md                 GitHub repo 操作
 docs/SECURITY.md                      安全注意事項
 wrangler.toml                         Cloudflare Pages 設定
+```
+
+## 使用模式
+
+這個專案可以選擇是否使用後端：
+
+```text
+Cloudflare 後端：Web -> Cloudflare -> MCU
+直連 MCU：Web -> MCU /api/local/*
+MCU 自架網站：Browser -> MCU IP
+```
+
+`DEVICE_TOKEN` / `ALARM_LOCAL_API_TOKEN` 都放在 MCU 的 `arduino_secrets.h` 或 Cloudflare Secret，不要 commit 到 GitHub。
+
+詳細差異請看：
+
+```text
+docs/DEPLOYMENT_MODES.md
 ```
 
 ## API 路徑

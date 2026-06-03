@@ -7,6 +7,7 @@
 - Wi-Fi SSID 與密碼
 - `DEVICE_TOKEN`
 - MCU 的 `API_TOKEN`
+- MCU 的 `ALARM_LOCAL_API_TOKEN`
 - 私人 API domain 的管理密鑰
 - Cloudflare API token 或部署 token
 
@@ -39,6 +40,8 @@ DEVICE_TOKEN=your-secret-token
 則 MCU 的 `API_TOKEN` 必須一致。
 
 Web UI 不應保存 `DEVICE_TOKEN`。部署到 Cloudflare 時，請使用 Cloudflare Access 保護網站與 `/api/web/*`，讓瀏覽器不需要知道管理 token。
+
+Direct MCU mode is different: the browser talks to the MCU directly. If `ALARM_LOCAL_API_TOKEN` is set, the user must enter that local token in the Web UI so it can send `X-Local-Token` to `http://<MCU-IP>/api/local/*`.
 
 ## Cloudflare Pages
 

@@ -99,6 +99,7 @@
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <WebServer.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -139,6 +140,7 @@ const bool WIFI_SLEEP = ALARM_WIFI_SLEEP;
 // 每一台裝置都要不同 ID。
 // 例如第二台改成 alarm_c3_002，第三台改成 alarm_c3_003。
 #ifndef ALARM_DEVICE_ID
+#ifndef ALARM_DEVICE_ID
 #define ALARM_DEVICE_ID "alarm_c3_001"
 #endif
 
@@ -162,16 +164,35 @@ const char* CONFIG_URL_BASE = ALARM_CONFIG_URL_BASE;
 const char* STATUS_URL      = ALARM_STATUS_URL;
 const char* SYNC_URL        = ALARM_SYNC_URL;
 
+#ifndef ALARM_ENABLE_CLOUD_SYNC
+#define ALARM_ENABLE_CLOUD_SYNC true
+#endif
+
+const bool CLOUD_SYNC_ENABLED = ALARM_ENABLE_CLOUD_SYNC;
+
 // 可選：如果網站需要簡單 token 驗證，就填入 token。
 // 不需要就保持空字串。
+#ifndef ALARM_API_TOKEN
 #ifndef ALARM_API_TOKEN
 #define ALARM_API_TOKEN ""
 #endif
 
 const char* API_TOKEN = ALARM_API_TOKEN;
 
+#ifndef ALARM_ENABLE_LOCAL_API
+#define ALARM_ENABLE_LOCAL_API true
+#endif
+
+#ifndef ALARM_LOCAL_API_TOKEN
+#define ALARM_LOCAL_API_TOKEN ALARM_API_TOKEN
+#endif
+
+const bool LOCAL_API_ENABLED = ALARM_ENABLE_LOCAL_API;
+const char* LOCAL_API_TOKEN = ALARM_LOCAL_API_TOKEN;
+
 // 如果使用 https 且沒有安裝憑證，設 true 會略過憑證驗證。
 // 做專題測試可以先 true；正式產品不建議。
+#ifndef ALARM_HTTPS_INSECURE
 #ifndef ALARM_HTTPS_INSECURE
 #define ALARM_HTTPS_INSECURE true
 #endif
@@ -221,6 +242,7 @@ const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
 Adafruit_DRV2605 drv;
 Preferences prefs;
 WiFiClientSecure secureClient;
+WebServer localServer(80);
 
 // ============================================================
 // Alarm data
@@ -268,6 +290,7 @@ bool wifiConnecting = false;
 unsigned long wifiConnectStartMs = 0;
 unsigned long lastWifiTryMs = 0;
 uint8_t wifiFailCount = 0;
+bool localApiStarted = false;
 
 unsigned long lastSyncMs = 0;
 unsigned long lastHeartbeatPrintMs = 0;
@@ -910,7 +933,22 @@ bool syncConfigFromServer() {
 // Status POST to website
 // ============================================================
 
-void fillStatusJson(JsonDocument& doc) {
+void fillConfigJsonObject(JsonObject doc) {
+  doc["deviceId"] = DEVICE_ID;
+  doc["enabled"] = alarmConfig.enabled;
+  doc["hour"] = alarmConfig.hour;
+  doc["minute"] = alarmConfig.minute;
+  doc["repeatMask"] = alarmConfig.repeatMask;
+  doc["prealertSec"] = alarmConfig.prealertSec;
+  doc["snoozeMin"] = alarmConfig.snoozeMin;
+  doc["maxRingSec"] = alarmConfig.maxRingSec;
+  doc["hapticEffect"] = alarmConfig.hapticEffect;
+  doc["version"] = alarmConfig.version;
+  doc["commandId"] = lastCommandId;
+  doc["command"] = "none";
+}
+
+void fillStatusJsonObject(JsonObject doc) {
   doc["deviceId"] = DEVICE_ID;
   doc["online"] = true;
   doc["state"] = stateToString(stateNow);
@@ -940,6 +978,10 @@ void fillStatusJson(JsonDocument& doc) {
   doc["lastAction"] = lastAction;
   doc["lastCommandId"] = lastCommandId;
   doc["heap"] = ESP.getFreeHeap();
+}
+
+void fillStatusJson(JsonDocument& doc) {
+  fillStatusJsonObject(doc.to<JsonObject>());
 }
 
 bool postStatusToServer() {
@@ -976,6 +1018,10 @@ bool postStatusToServer() {
 
 bool syncWithServer() {
   if (WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  if (!CLOUD_SYNC_ENABLED || strlen(SYNC_URL) == 0) {
     return false;
   }
 
@@ -1034,6 +1080,297 @@ bool syncWithServer() {
   }
 
   return applyConfigFromJson(config);
+}
+
+// ============================================================
+// Local MCU website/API
+// ============================================================
+
+const char LOCAL_WEB_PAGE[] PROGMEM = R"rawliteral(
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32-C3 Alarm</title>
+  <style>
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#0a0a0a;color:#f5f5f5}
+    body{margin:0;padding:18px}
+    main{max-width:680px;margin:auto}
+    section{border:1px solid #262626;background:#171717;border-radius:8px;padding:16px;margin:0 0 14px}
+    h1{font-size:22px;margin:0 0 4px}
+    h2{font-size:16px;margin:0 0 12px}
+    p{color:#a3a3a3;margin:4px 0}
+    label{display:block;font-size:13px;color:#a3a3a3;margin:10px 0 4px}
+    input{box-sizing:border-box;width:100%;height:42px;border:1px solid #404040;border-radius:6px;background:#050505;color:#f5f5f5;padding:0 10px}
+    button{height:40px;border:1px solid #404040;border-radius:6px;background:#0a0a0a;color:#f5f5f5;padding:0 12px;font-weight:600}
+    button:hover{background:#262626}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    .cmds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .state{font-size:32px;font-weight:700;color:#67e8f9}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+    pre{white-space:pre-wrap;max-height:220px;overflow:auto;border-radius:6px;background:#050505;padding:12px;color:#d4d4d4}
+  </style>
+</head>
+<body>
+<main>
+  <section>
+    <h1>ESP32-C3 Alarm</h1>
+    <p id="meta">Local MCU mode</p>
+    <div class="state" id="state">--</div>
+    <p id="statusLine">尚未讀取</p>
+  </section>
+  <section>
+    <h2>本機 API</h2>
+    <label>Local API Token</label>
+    <input id="token" type="password" placeholder="ALARM_LOCAL_API_TOKEN，留空代表未啟用">
+  </section>
+  <section>
+    <h2>鬧鐘設定</h2>
+    <div class="grid">
+      <div><label>小時</label><input id="hour" type="number" min="0" max="23"></div>
+      <div><label>分鐘</label><input id="minute" type="number" min="0" max="59"></div>
+      <div><label>震動效果</label><input id="effect" type="number" min="1" max="123"></div>
+      <div><label>貪睡分鐘</label><input id="snooze" type="number" min="1" max="60"></div>
+    </div>
+    <label>Repeat mask</label>
+    <input id="repeat" type="number" min="0" max="127">
+    <label><input id="enabled" type="checkbox" style="width:auto;height:auto"> 啟用鬧鐘</label>
+    <button onclick="saveConfig()">儲存設定</button>
+  </section>
+  <section>
+    <h2>控制指令</h2>
+    <div class="cmds">
+      <button onclick="sendCommand('test_led')">測試 LED</button>
+      <button onclick="sendCommand('test_haptic')">測試震動</button>
+      <button onclick="sendCommand('start_alarm')">啟動鬧鐘</button>
+      <button onclick="sendCommand('stop_alarm')">停止鬧鐘</button>
+      <button onclick="sendCommand('snooze')">貪睡</button>
+    </div>
+  </section>
+  <section>
+    <div class="row">
+      <h2>事件</h2>
+      <button onclick="refresh()">重新整理</button>
+    </div>
+    <pre id="log"></pre>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+function headers(){
+  const token = $('token').value.trim();
+  const next = {'Content-Type':'application/json'};
+  if(token) next['X-Local-Token'] = token;
+  return next;
+}
+function log(text, data){
+  $('log').textContent = new Date().toLocaleTimeString() + ' ' + text + (data ? '\n' + JSON.stringify(data, null, 2) : '');
+}
+async function refresh(){
+  try{
+    const res = await fetch('/api/local/status', {headers: headers()});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    const c = data.config || {};
+    const s = data.status || {};
+    $('state').textContent = s.state || '--';
+    $('statusLine').textContent = (s.ip || '-') + ' · RSSI ' + (s.wifiRssi || 0) + ' · heap ' + (s.heap || 0);
+    $('meta').textContent = c.deviceId || 'alarm_c3_001';
+    $('hour').value = c.hour ?? 7;
+    $('minute').value = c.minute ?? 30;
+    $('effect').value = c.hapticEffect ?? 17;
+    $('snooze').value = c.snoozeMin ?? 5;
+    $('repeat').value = c.repeatMask ?? 62;
+    $('enabled').checked = Boolean(c.enabled);
+    log('狀態已更新', data);
+  }catch(error){ log('讀取失敗: ' + error.message); }
+}
+async function saveConfig(){
+  const body = {
+    enabled: $('enabled').checked,
+    hour: Number($('hour').value),
+    minute: Number($('minute').value),
+    repeatMask: Number($('repeat').value),
+    snoozeMin: Number($('snooze').value),
+    hapticEffect: Number($('effect').value)
+  };
+  try{
+    const res = await fetch('/api/local/config', {method:'POST',headers:headers(),body:JSON.stringify(body)});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    log('設定已儲存', await res.json());
+    refresh();
+  }catch(error){ log('儲存失敗: ' + error.message); }
+}
+async function sendCommand(command){
+  try{
+    const res = await fetch('/api/local/command', {method:'POST',headers:headers(),body:JSON.stringify({command, hapticEffect:Number($('effect').value)})});
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    log('指令已送出: ' + command, await res.json());
+    refresh();
+  }catch(error){ log('指令失敗: ' + error.message); }
+}
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>
+)rawliteral";
+
+void addLocalCorsHeaders() {
+  localServer.sendHeader("Access-Control-Allow-Origin", "*");
+  localServer.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  localServer.sendHeader("Access-Control-Allow-Headers", "Content-Type,X-Local-Token,X-Device-Token");
+}
+
+void sendLocalJson(JsonDocument& doc, int statusCode = 200) {
+  String body;
+  serializeJson(doc, body);
+  addLocalCorsHeaders();
+  localServer.send(statusCode, "application/json", body);
+}
+
+void sendLocalError(int statusCode, const char* message) {
+  StaticJsonDocument<160> doc;
+  doc["error"] = message;
+  sendLocalJson(doc, statusCode);
+}
+
+bool hasLocalApiToken() {
+  if (strlen(LOCAL_API_TOKEN) == 0) {
+    return true;
+  }
+
+  String localToken = localServer.header("X-Local-Token");
+  String deviceToken = localServer.header("X-Device-Token");
+  return localToken == LOCAL_API_TOKEN || deviceToken == LOCAL_API_TOKEN;
+}
+
+bool ensureLocalApiAccess() {
+  if (localServer.method() == HTTP_OPTIONS) {
+    addLocalCorsHeaders();
+    localServer.send(204, "text/plain", "");
+    return false;
+  }
+
+  if (!hasLocalApiToken()) {
+    sendLocalError(401, "Invalid or missing X-Local-Token");
+    return false;
+  }
+
+  return true;
+}
+
+bool isAllowedLocalCommand(const String& command) {
+  return command == "none" ||
+         command == "test_led" ||
+         command == "test_haptic" ||
+         command == "start_alarm" ||
+         command == "stop_alarm" ||
+         command == "snooze";
+}
+
+void handleLocalHome() {
+  localServer.send_P(200, "text/html; charset=utf-8", LOCAL_WEB_PAGE);
+}
+
+void handleLocalStatus() {
+  if (!ensureLocalApiAccess()) return;
+
+  StaticJsonDocument<1536> doc;
+  fillConfigJsonObject(doc.createNestedObject("config"));
+  fillStatusJsonObject(doc.createNestedObject("status"));
+  sendLocalJson(doc);
+}
+
+void handleLocalConfig() {
+  if (!ensureLocalApiAccess()) return;
+
+  StaticJsonDocument<768> body;
+  DeserializationError err = deserializeJson(body, localServer.arg("plain"));
+
+  if (err) {
+    sendLocalError(400, "Invalid JSON body");
+    return;
+  }
+
+  body["deviceId"] = DEVICE_ID;
+  body["version"] = alarmConfig.version + 1;
+  body["command"] = "none";
+  body["commandId"] = lastCommandId;
+
+  if (!applyConfigFromJson(body.as<JsonVariantConst>())) {
+    sendLocalError(400, "Config rejected");
+    return;
+  }
+
+  StaticJsonDocument<768> response;
+  response["success"] = true;
+  fillConfigJsonObject(response.createNestedObject("config"));
+  sendLocalJson(response);
+}
+
+void handleLocalCommand() {
+  if (!ensureLocalApiAccess()) return;
+
+  StaticJsonDocument<384> body;
+  DeserializationError err = deserializeJson(body, localServer.arg("plain"));
+
+  if (err) {
+    sendLocalError(400, "Invalid JSON body");
+    return;
+  }
+
+  String command = String(body["command"] | "none");
+  command.trim();
+
+  if (!isAllowedLocalCommand(command)) {
+    sendLocalError(400, "Unsupported command");
+    return;
+  }
+
+  int effect = body["hapticEffect"] | alarmConfig.hapticEffect;
+  int nextCommandId = lastCommandId + 1;
+  executeCommand(nextCommandId, command, effect);
+
+  StaticJsonDocument<768> response;
+  response["success"] = true;
+  response["commandId"] = lastCommandId;
+  fillConfigJsonObject(response.createNestedObject("config"));
+  sendLocalJson(response);
+}
+
+void handleLocalOptions() {
+  addLocalCorsHeaders();
+  localServer.send(204, "text/plain", "");
+}
+
+void setupLocalApiServer() {
+  if (!LOCAL_API_ENABLED || localApiStarted || WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  const char* headers[] = { "X-Local-Token", "X-Device-Token" };
+  localServer.collectHeaders(headers, 2);
+  localServer.on("/", HTTP_GET, handleLocalHome);
+  localServer.on("/api/local/status", HTTP_GET, handleLocalStatus);
+  localServer.on("/api/local/status", HTTP_OPTIONS, handleLocalOptions);
+  localServer.on("/api/local/config", HTTP_POST, handleLocalConfig);
+  localServer.on("/api/local/config", HTTP_OPTIONS, handleLocalOptions);
+  localServer.on("/api/local/command", HTTP_POST, handleLocalCommand);
+  localServer.on("/api/local/command", HTTP_OPTIONS, handleLocalOptions);
+  localServer.begin();
+  localApiStarted = true;
+
+  Serial.print("[LocalAPI] Listening at http://");
+  Serial.print(WiFi.localIP());
+  Serial.println("/");
+}
+
+void maintainLocalApiServer() {
+  if (LOCAL_API_ENABLED && localApiStarted) {
+    localServer.handleClient();
+  }
 }
 
 // ============================================================
@@ -1349,8 +1686,11 @@ void setup() {
   setupWiFi();
 
   if (WiFi.status() == WL_CONNECTED) {
+    setupLocalApiServer();
     setupTimeNTP();
-    syncWithServer();
+    if (CLOUD_SYNC_ENABLED) {
+      syncWithServer();
+    }
   }
 
   lastSyncMs = millis();
@@ -1366,9 +1706,15 @@ void setup() {
 
 void loop() {
   maintainWiFi();
+  maintainLocalApiServer();
+
+  if (WiFi.status() == WL_CONNECTED) {
+    setupLocalApiServer();
+  }
 
   // 如果 Wi-Fi 原本斷線後又連上，補做 NTP
   if (WiFi.status() == WL_CONNECTED && !timeOK) {
+    setupLocalApiServer();
     setupTimeNTP();
   }
 
@@ -1376,7 +1722,7 @@ void loop() {
   updateAlarmEngine();
   updateLedPattern();
 
-  if (WiFi.status() == WL_CONNECTED && millis() - lastSyncMs >= SYNC_INTERVAL_MS) {
+  if (WiFi.status() == WL_CONNECTED && CLOUD_SYNC_ENABLED && millis() - lastSyncMs >= SYNC_INTERVAL_MS) {
     lastSyncMs = millis();
     syncWithServer();
   }

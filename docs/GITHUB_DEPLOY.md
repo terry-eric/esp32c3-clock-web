@@ -58,6 +58,7 @@ Variable: REQUIRE_CF_ACCESS=true
 
 ```text
 docs/CLOUDFLARE_DEPLOY.md
+docs/DEPLOYMENT_MODES.md
 ```
 
 ## 5. MCU 設定

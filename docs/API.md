@@ -137,6 +137,61 @@ Response:
 }
 ```
 
+## MCU Local Endpoints
+
+These endpoints run directly on the ESP32-C3 when `ALARM_ENABLE_LOCAL_API` is true.
+
+If `ALARM_LOCAL_API_TOKEN` is set, requests must include:
+
+```text
+X-Local-Token: your-local-token
+```
+
+### GET `/api/local/status`
+
+Response:
+
+```json
+{
+  "config": {},
+  "status": {}
+}
+```
+
+### POST `/api/local/config`
+
+Body uses the same config fields as `/api/web/config`.
+
+Response:
+
+```json
+{
+  "success": true,
+  "config": {}
+}
+```
+
+### POST `/api/local/command`
+
+Body:
+
+```json
+{
+  "command": "test_haptic",
+  "hapticEffect": 17
+}
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "commandId": 1,
+  "config": {}
+}
+```
+
 ## Web Endpoints
 
 ### GET `/api/web/status`
