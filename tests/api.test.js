@@ -92,4 +92,20 @@ describe('ESP32-C3 alarm API', () => {
     assert.equal(commandData.config.hapticEffect, 17);
     assert.ok(commandData.commandId > 0);
   });
+
+  it('rejects unsupported commands', async () => {
+    const response = await fetch(`${baseUrl}/web/command`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceId: 'alarm_c3_001',
+        command: 'format_flash'
+      })
+    });
+
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.equal(data.error, 'Unsupported command');
+    assert.ok(data.allowedCommands.includes('test_haptic'));
+  });
 });

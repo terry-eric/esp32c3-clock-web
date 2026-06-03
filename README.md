@@ -7,6 +7,7 @@
 - `esp32_c3_alarm_controller_hub.tsx`：原始控制面板參考檔，目前不作為 build 入口。
 - `server/`：給 MCU 與網站共用的 Node.js API server。
 - `docs/API.md`：MCU 與 Web 共用的 API 規格。
+- `docs/GITHUB_DEPLOY.md`：推 GitHub、啟用 Pages、部署 API、設定 MCU 的完整清單。
 - `render.yaml`：Render 部署 API server 的參考設定。
 
 ## API 對接
@@ -74,7 +75,7 @@ FRONTEND_ORIGIN=https://YOUR_GITHUB_USERNAME.github.io
 
 如果 `DEVICE_TOKEN` 有設定，網站控制面板的 `API Token` 欄位與 MCU 的 `API_TOKEN` 必須填同一組值。
 
-API 細節請看 `docs/API.md`。
+API 細節請看 `docs/API.md`。完整 GitHub 上線流程請看 `docs/GITHUB_DEPLOY.md`。
 
 ## MCU 端需要確認的欄位
 

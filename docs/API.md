@@ -163,6 +163,8 @@ stop_alarm
 snooze
 ```
 
+其他 command 會回傳 `400 Unsupported command`，避免 Web UI 打錯字時 MCU 端靜默忽略。
+
 Response:
 
 ```json

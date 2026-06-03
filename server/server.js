@@ -15,6 +15,14 @@ app.use(cors({
 app.use(express.json({ limit: '64kb' }));
 
 const defaultDeviceId = 'alarm_c3_001';
+const allowedCommands = new Set([
+  'none',
+  'test_led',
+  'test_haptic',
+  'start_alarm',
+  'stop_alarm',
+  'snooze'
+]);
 const deviceConfigs = new Map();
 const deviceStatuses = new Map();
 
@@ -152,6 +160,14 @@ app.post('/web/command', requireToken, (req, res) => {
   const deviceId = String(body.deviceId || defaultDeviceId);
   const previous = getConfig(deviceId);
   const command = String(body.command || 'none');
+
+  if (!allowedCommands.has(command)) {
+    return res.status(400).json({
+      error: 'Unsupported command',
+      allowedCommands: Array.from(allowedCommands)
+    });
+  }
+
   const next = {
     ...previous,
     command,
