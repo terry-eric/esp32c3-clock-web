@@ -8,7 +8,7 @@
 - `DEVICE_TOKEN`
 - MCU 的 `API_TOKEN`
 - 私人 API domain 的管理密鑰
-- Render/Railway/VPS 的部署 token
+- Cloudflare API token 或部署 token
 
 ## MCU 設定
 
@@ -28,7 +28,7 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 
 `arduino_secrets.h` 已被 `.gitignore` 排除，不會被 commit。若檔案不存在，主程式會使用 placeholder 預設值。
 
-## API Token
+## MCU Device Token
 
 若 API server 設定：
 
@@ -36,10 +36,12 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 DEVICE_TOKEN=your-secret-token
 ```
 
-則 Web UI 的 `API Token` 與 MCU 的 `API_TOKEN` 必須一致。
+則 MCU 的 `API_TOKEN` 必須一致。
 
-## GitHub Pages
+Web UI 不應保存 `DEVICE_TOKEN`。部署到 Cloudflare 時，請使用 Cloudflare Access 保護網站與 `/api/web/*`，讓瀏覽器不需要知道管理 token。
 
-GitHub Pages 的前端會存取外部 API。API 必須使用 HTTPS，否則瀏覽器會阻擋請求。
+## Cloudflare Pages
 
-Web UI 會把 API Base URL、Device ID 與 API Token 存在瀏覽器 localStorage，方便重新整理後保留設定。請只在你信任的電腦上輸入 token。
+Cloudflare Pages 的前端會存取同源 `/api`。API 必須使用 HTTPS，否則瀏覽器會阻擋請求。
+
+Web UI 只會把 API Base URL 與 Device ID 存在瀏覽器 localStorage，不保存 API token。

@@ -1,28 +1,28 @@
 # API Specification
 
-前端可以放在 GitHub Pages，但 API 必須部署在可執行 Node.js 的 HTTPS host。
+前端建議放在 Cloudflare Pages，API 由 Cloudflare Pages Functions 提供。
 
 建議正式網址：
 
 ```text
-https://your-api-domain.com
+https://your-cloudflare-pages-domain.pages.dev/api
 ```
 
-GitHub Pages 是 HTTPS，因此 API 也必須是 HTTPS，否則瀏覽器會因 mixed content 擋掉請求。
+Cloudflare Pages 是 HTTPS，因此 API 也必須是 HTTPS。使用同源 `/api` 可以避免 mixed content 與 CORS 問題。
 
 ## Authentication
 
-如果 API server 有設定 `DEVICE_TOKEN`，所有 MCU 與 Web 請求都要帶：
+如果 Cloudflare Pages Function 有設定 `DEVICE_TOKEN`，MCU 請求要帶：
 
 ```text
 X-Device-Token: your-token
 ```
 
-未設定 `DEVICE_TOKEN` 時，server 不檢查 token，適合本機測試。
+Web 管理端不要把 `DEVICE_TOKEN` 放進前端。正式環境建議用 Cloudflare Access 保護 Web UI 與 `/api/web/*`。
 
 ## MCU Endpoints
 
-### GET `/clock`
+### GET `/api/clock`
 
 MCU 取得設定與待執行指令。
 
@@ -53,7 +53,7 @@ Response:
 
 `commandId` 每次有新指令時會增加。MCU 只在看到新的 `commandId` 時執行一次指令。
 
-### POST `/state`
+### POST `/api/state`
 
 MCU 回傳目前狀態。
 
@@ -90,7 +90,7 @@ Response:
 
 ## Web Endpoints
 
-### GET `/web/status`
+### GET `/api/web/status`
 
 網站讀取設定與狀態。
 
@@ -109,7 +109,7 @@ Response:
 }
 ```
 
-### POST `/web/config`
+### POST `/api/web/config`
 
 網站更新鬧鐘設定。
 
@@ -138,7 +138,7 @@ Response:
 }
 ```
 
-### POST `/web/command`
+### POST `/api/web/command`
 
 網站送出遠端指令。
 

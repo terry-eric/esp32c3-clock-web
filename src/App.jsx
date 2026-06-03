@@ -53,7 +53,9 @@ const days = [
 ];
 
 function cleanUrl(url) {
-  return url.trim().replace(/\/+$/, '');
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  return trimmed.replace(/\/+$/, '');
 }
 
 function readSetting(key, fallback) {
@@ -68,25 +70,25 @@ function statusColor(status) {
 }
 
 export default function App() {
-  const [apiBaseUrl, setApiBaseUrl] = useState(() => readSetting('apiBaseUrl', 'https://your-api-domain.com'));
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => readSetting('apiBaseUrl', ''));
   const [deviceId, setDeviceId] = useState(() => readSetting('deviceId', 'alarm_c3_001'));
-  const [apiToken, setApiToken] = useState(() => readSetting('apiToken', ''));
   const [config, setConfig] = useState(defaultConfig);
   const [status, setStatus] = useState(defaultStatus);
   const [logs, setLogs] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  const base = useMemo(() => cleanUrl(apiBaseUrl), [apiBaseUrl]);
+  const base = useMemo(() => {
+    const value = cleanUrl(apiBaseUrl);
+    return value || '/api';
+  }, [apiBaseUrl]);
   const headers = useMemo(() => ({
-    'Content-Type': 'application/json',
-    ...(apiToken ? { 'X-Device-Token': apiToken } : {})
-  }), [apiToken]);
+    'Content-Type': 'application/json'
+  }), []);
 
   useEffect(() => {
     window.localStorage.setItem('apiBaseUrl', apiBaseUrl);
     window.localStorage.setItem('deviceId', deviceId);
-    window.localStorage.setItem('apiToken', apiToken);
-  }, [apiBaseUrl, deviceId, apiToken]);
+  }, [apiBaseUrl, deviceId]);
 
   function addLog(type, message, data) {
     setLogs((items) => [
@@ -106,9 +108,7 @@ export default function App() {
 
     setBusy(true);
     try {
-      const response = await fetch(`${base}/web/status?device_id=${encodeURIComponent(deviceId)}`, {
-        headers: apiToken ? { 'X-Device-Token': apiToken } : {}
-      });
+      const response = await fetch(`${base}/web/status?device_id=${encodeURIComponent(deviceId)}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -180,7 +180,7 @@ export default function App() {
     refreshStatus();
     const timer = window.setInterval(refreshStatus, 15000);
     return () => window.clearInterval(timer);
-  }, [base, deviceId, apiToken]);
+  }, [base, deviceId]);
 
   const alarmTime = `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 
@@ -190,7 +190,7 @@ export default function App() {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-xl font-semibold">ESP32-C3 Alarm Hub</h1>
-            <p className="mt-1 text-sm text-neutral-400">GitHub Pages 前端 + 外部 Node API + MCU 同步控制</p>
+            <p className="mt-1 text-sm text-neutral-400">Cloudflare Pages 前端 + Functions API + MCU 同步控制</p>
           </div>
           <button
             type="button"
@@ -315,14 +315,13 @@ export default function App() {
           <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
             <h2 className="text-base font-semibold">API 連線</h2>
             <div className="mt-4 space-y-3">
-              <TextField label="API Base URL" value={apiBaseUrl} onChange={setApiBaseUrl} />
+              <TextField label="API Base URL" value={apiBaseUrl} onChange={setApiBaseUrl} placeholder="留空使用同源 /api" />
               <TextField label="Device ID" value={deviceId} onChange={setDeviceId} />
-              <TextField label="API Token" value={apiToken} onChange={setApiToken} type="password" />
             </div>
             <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-300">
-              <p>MCU GET {base || '<api>'}/clock?device_id={deviceId}</p>
-              <p>MCU POST {base || '<api>'}/state</p>
-              <p>WEB GET {base || '<api>'}/web/status</p>
+              <p>MCU GET {base}/clock?device_id={deviceId}</p>
+              <p>MCU POST {base}/state</p>
+              <p>WEB GET {base}/web/status</p>
             </div>
           </div>
 
@@ -364,13 +363,14 @@ function Info({ label, value }) {
   );
 }
 
-function TextField({ label, value, onChange, type = 'text' }) {
+function TextField({ label, value, onChange, type = 'text', placeholder = '' }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block text-neutral-400">{label}</span>
       <input
         type={type}
         value={value}
+        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
       />

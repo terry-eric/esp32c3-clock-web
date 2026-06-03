@@ -8,8 +8,8 @@
 
 #define ALARM_DEVICE_ID "alarm_c3_001"
 
-#define ALARM_CONFIG_URL_BASE "https://your-api-domain.com/clock"
-#define ALARM_STATUS_URL "https://your-api-domain.com/state"
+#define ALARM_CONFIG_URL_BASE "https://your-cloudflare-pages-domain.pages.dev/api/clock"
+#define ALARM_STATUS_URL "https://your-cloudflare-pages-domain.pages.dev/api/state"
 
 // Leave empty when the API server has no DEVICE_TOKEN.
 #define ALARM_API_TOKEN ""
