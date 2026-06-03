@@ -26,6 +26,7 @@ docs/CLOUDFLARE_DEPLOY.md             Cloudflare 架設流程
 docs/DEPLOYMENT_MODES.md              後端/無後端/MCU 自架網站模式
 docs/EXAMPLES.md                      設定與 API 範例
 docs/GITHUB_DEPLOY.md                 GitHub repo 操作
+docs/MCU_LOGIC.md                     MCU 開機、連線、鬧鐘流程圖
 docs/SECURITY.md                      安全注意事項
 wrangler.toml                         Cloudflare Pages 設定
 ```

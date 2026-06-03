@@ -135,6 +135,22 @@ const char* WIFI_PASS = ALARM_WIFI_PASS;
 #define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
 #endif
 
+#ifndef ALARM_WIFI_CONNECT_TX_POWER
+#define ALARM_WIFI_CONNECT_TX_POWER WIFI_POWER_15dBm
+#endif
+
+#ifndef ALARM_WIFI_CONNECT_TIMEOUT_MS
+#define ALARM_WIFI_CONNECT_TIMEOUT_MS 12000UL
+#endif
+
+#ifndef ALARM_WIFI_RETRY_INTERVAL_MS
+#define ALARM_WIFI_RETRY_INTERVAL_MS 60000UL
+#endif
+
+#ifndef ALARM_WIFI_RETRY_MAX_INTERVAL_MS
+#define ALARM_WIFI_RETRY_MAX_INTERVAL_MS 300000UL
+#endif
+
 const bool WIFI_SLEEP = ALARM_WIFI_SLEEP;
 
 // 每一台裝置都要不同 ID。
@@ -223,9 +239,9 @@ const bool TOUCH_ACTIVE_HIGH = false;
 // Timing settings
 // ============================================================
 
-const unsigned long WIFI_CONNECT_TIMEOUT_MS       = 12000;
-const unsigned long WIFI_RETRY_INTERVAL_MS        = 60000;
-const unsigned long WIFI_RETRY_MAX_INTERVAL_MS    = 300000;
+const unsigned long WIFI_CONNECT_TIMEOUT_MS       = ALARM_WIFI_CONNECT_TIMEOUT_MS;
+const unsigned long WIFI_RETRY_INTERVAL_MS        = ALARM_WIFI_RETRY_INTERVAL_MS;
+const unsigned long WIFI_RETRY_MAX_INTERVAL_MS    = ALARM_WIFI_RETRY_MAX_INTERVAL_MS;
 const unsigned long SYNC_INTERVAL_MS              = 60000;
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
 
@@ -291,6 +307,7 @@ unsigned long wifiConnectStartMs = 0;
 unsigned long lastWifiTryMs = 0;
 uint8_t wifiFailCount = 0;
 bool localApiStarted = false;
+bool wifiRadioOffBetweenRetries = false;
 
 unsigned long lastSyncMs = 0;
 unsigned long lastHeartbeatPrintMs = 0;
@@ -485,6 +502,10 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     case ARDUINO_EVENT_WIFI_STA_GOT_IP:
       Serial.print("[WiFiEvent] GOT_IP ");
       Serial.println(WiFi.localIP());
+      WiFi.setSleep(WIFI_SLEEP);
+      WiFi.setTxPower(ALARM_WIFI_TX_POWER);
+      wifiFailCount = 0;
+      wifiRadioOffBetweenRetries = false;
       break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
       Serial.print("[WiFiEvent] STA_DISCONNECTED reason=");
@@ -493,6 +514,15 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
     default:
       break;
   }
+}
+
+void stopWiFiUntilNextRetry() {
+  Serial.println("[WiFi] Radio off until next retry");
+  WiFi.disconnect(false, false);
+  WiFi.mode(WIFI_OFF);
+  wifiConnecting = false;
+  localApiStarted = false;
+  wifiRadioOffBetweenRetries = true;
 }
 
 unsigned long currentWifiRetryIntervalMs() {
@@ -515,8 +545,8 @@ void startWiFiConnect() {
   delay(500);
 
   WiFi.mode(WIFI_STA);
-  WiFi.setSleep(WIFI_SLEEP);
-  WiFi.setTxPower(ALARM_WIFI_TX_POWER);
+  WiFi.setSleep(false);
+  WiFi.setTxPower(ALARM_WIFI_CONNECT_TX_POWER);
   WiFi.setAutoReconnect(false);
   WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
 
@@ -525,7 +555,11 @@ void startWiFiConnect() {
   Serial.print(WIFI_SSID);
   Serial.println(" using direct connect");
   Serial.print("[WiFi] Sleep = ");
-  Serial.println(WIFI_SLEEP ? "ON" : "OFF");
+  Serial.println("OFF while connecting");
+  Serial.print("[WiFi] Connect TX power enum = ");
+  Serial.println((int)ALARM_WIFI_CONNECT_TX_POWER);
+  Serial.print("[WiFi] Steady TX power enum = ");
+  Serial.println((int)ALARM_WIFI_TX_POWER);
   Serial.print("[WiFi] Retry wait after failure = ");
   Serial.print(currentWifiRetryIntervalMs() / 1000);
   Serial.println(" sec");
@@ -535,6 +569,7 @@ void startWiFiConnect() {
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 
   wifiConnecting = true;
+  wifiRadioOffBetweenRetries = false;
   wifiConnectStartMs = millis();
   lastWifiTryMs = millis();
 }
@@ -543,6 +578,7 @@ void maintainWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnecting = false;
     wifiFailCount = 0;
+    wifiRadioOffBetweenRetries = false;
     return;
   }
 
@@ -557,12 +593,11 @@ void maintainWiFi() {
     Serial.print(" (");
     Serial.print(wifiStatusToString(WiFi.status()));
     Serial.println(")");
-    WiFi.disconnect(false, false);
-    wifiConnecting = false;
     if (wifiFailCount < 5) {
       wifiFailCount++;
     }
     lastWifiTryMs = millis();
+    stopWiFiUntilNextRetry();
     return;
   }
 
@@ -585,6 +620,9 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
       Serial.print("[WiFi] IP = ");
       Serial.println(WiFi.localIP());
       wifiFailCount = 0;
+      wifiRadioOffBetweenRetries = false;
+      WiFi.setSleep(WIFI_SLEEP);
+      WiFi.setTxPower(ALARM_WIFI_TX_POWER);
       return true;
     }
 
@@ -610,6 +648,8 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
   if (wifiFailCount < 5) {
     wifiFailCount++;
   }
+  lastWifiTryMs = millis();
+  stopWiFiUntilNextRetry();
   return false;
 }
 
@@ -1645,9 +1685,16 @@ void printHeartbeat() {
                   alarmConfig.minute,
                   alarmConfig.version);
   } else {
-    Serial.printf("[HB] time invalid, state=%s, WiFi=%s, DRV=%s\n",
+    unsigned long retryWaitMs = currentWifiRetryIntervalMs();
+    unsigned long retryElapsedMs = millis() - lastWifiTryMs;
+    unsigned long retryInSec = WiFi.status() == WL_CONNECTED || retryElapsedMs >= retryWaitMs
+                                ? 0
+                                : (retryWaitMs - retryElapsedMs) / 1000;
+
+    Serial.printf("[HB] time invalid, state=%s, WiFi=%s, retryIn=%lus, DRV=%s\n",
                   stateToString(stateNow).c_str(),
-                  WiFi.status() == WL_CONNECTED ? "OK" : "OFF",
+                  WiFi.status() == WL_CONNECTED ? "OK" : (wifiRadioOffBetweenRetries ? "RADIO_OFF" : "OFF"),
+                  retryInSec,
                   drvOK ? "OK" : "FAIL");
   }
 }

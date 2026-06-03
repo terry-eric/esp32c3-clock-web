@@ -20,6 +20,10 @@
 // Lower power WiFi defaults. Raise TX power if the AP is far away.
 #define ALARM_WIFI_SLEEP true
 #define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
+#define ALARM_WIFI_CONNECT_TX_POWER WIFI_POWER_15dBm
+#define ALARM_WIFI_CONNECT_TIMEOUT_MS 12000UL
+#define ALARM_WIFI_RETRY_INTERVAL_MS 60000UL
+#define ALARM_WIFI_RETRY_MAX_INTERVAL_MS 300000UL
 
 // Leave empty when the API server has no DEVICE_TOKEN.
 #define ALARM_API_TOKEN ""
