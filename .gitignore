@@ -4,3 +4,4 @@ dist/
 .env.*
 !.env.example
 *.log
+esp32c3_alarm_external_api_complete/arduino_secrets.h

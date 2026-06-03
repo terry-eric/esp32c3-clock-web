@@ -4,7 +4,6 @@
 
 - `esp32c3_alarm_external_api_complete/`：ESP32-C3 MCU 韌體。
 - `src/App.jsx`：GitHub Pages 使用的 React 網站控制面板。
-- `esp32_c3_alarm_controller_hub.tsx`：原始控制面板參考檔，目前不作為 build 入口。
 - `server/`：給 MCU 與網站共用的 Node.js API server。
 - `docs/API.md`：MCU 與 Web 共用的 API 規格。
 - `docs/GITHUB_DEPLOY.md`：推 GitHub、啟用 Pages、部署 API、設定 MCU 的完整清單。
@@ -84,9 +83,10 @@ API 細節請看 `docs/API.md`。完整 GitHub 上線流程請看 `docs/GITHUB_D
 在 `esp32c3_alarm_external_api_complete/esp32c3_alarm_external_api_complete.ino`：
 
 ```cpp
-const char* CONFIG_URL_BASE = "https://your-api-domain.com/clock";
-const char* STATUS_URL      = "https://your-api-domain.com/state";
-const char* API_TOKEN       = "";
+#define ALARM_CONFIG_URL_BASE "https://your-api-domain.com/clock"
+#define ALARM_STATUS_URL "https://your-api-domain.com/state"
+#define ALARM_API_TOKEN ""
 ```
 
 `STATUS_URL` 不能留空，否則 MCU 只會讀設定，不會把狀態回傳給網站。
+建議把實際值放在 `esp32c3_alarm_external_api_complete/arduino_secrets.h`，不要直接 commit 到公開 repo。

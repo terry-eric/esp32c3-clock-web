@@ -106,30 +106,62 @@
 #include <Preferences.h>
 #include <time.h>
 
+#if __has_include("arduino_secrets.h")
+#include "arduino_secrets.h"
+#endif
+
 // ============================================================
 // User settings
 // ============================================================
 
 // Wi-Fi
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+#ifndef ALARM_WIFI_SSID
+#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
+#endif
+
+#ifndef ALARM_WIFI_PASS
+#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
+#endif
+
+const char* WIFI_SSID = ALARM_WIFI_SSID;
+const char* WIFI_PASS = ALARM_WIFI_PASS;
 
 // 每一台裝置都要不同 ID。
 // 例如第二台改成 alarm_c3_002，第三台改成 alarm_c3_003。
-const char* DEVICE_ID = "alarm_c3_001";
+#ifndef ALARM_DEVICE_ID
+#define ALARM_DEVICE_ID "alarm_c3_001"
+#endif
+
+const char* DEVICE_ID = ALARM_DEVICE_ID;
 
 // 外部網站 API。
 // 先用 http 比較好測試；如果你的網站是 https，也可以直接填 https://...
-const char* CONFIG_URL_BASE = "https://demo.terry878.org/clock";
-const char* STATUS_URL      = "https://demo.terry878.org/state";
+#ifndef ALARM_CONFIG_URL_BASE
+#define ALARM_CONFIG_URL_BASE "https://your-api-domain.com/clock"
+#endif
+
+#ifndef ALARM_STATUS_URL
+#define ALARM_STATUS_URL "https://your-api-domain.com/state"
+#endif
+
+const char* CONFIG_URL_BASE = ALARM_CONFIG_URL_BASE;
+const char* STATUS_URL      = ALARM_STATUS_URL;
 
 // 可選：如果網站需要簡單 token 驗證，就填入 token。
 // 不需要就保持空字串。
-const char* API_TOKEN = "";
+#ifndef ALARM_API_TOKEN
+#define ALARM_API_TOKEN ""
+#endif
+
+const char* API_TOKEN = ALARM_API_TOKEN;
 
 // 如果使用 https 且沒有安裝憑證，設 true 會略過憑證驗證。
 // 做專題測試可以先 true；正式產品不建議。
-const bool HTTPS_INSECURE = true;
+#ifndef ALARM_HTTPS_INSECURE
+#define ALARM_HTTPS_INSECURE true
+#endif
+
+const bool HTTPS_INSECURE = ALARM_HTTPS_INSECURE;
 
 // Taiwan timezone: UTC+8
 const long GMT_OFFSET_SEC = 8 * 3600;

@@ -68,7 +68,7 @@ function statusColor(status) {
 }
 
 export default function App() {
-  const [apiBaseUrl, setApiBaseUrl] = useState(() => readSetting('apiBaseUrl', 'https://demo.terry878.org'));
+  const [apiBaseUrl, setApiBaseUrl] = useState(() => readSetting('apiBaseUrl', 'https://your-api-domain.com'));
   const [deviceId, setDeviceId] = useState(() => readSetting('deviceId', 'alarm_c3_001'));
   const [apiToken, setApiToken] = useState(() => readSetting('apiToken', ''));
   const [config, setConfig] = useState(defaultConfig);

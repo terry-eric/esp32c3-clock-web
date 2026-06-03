@@ -77,12 +77,20 @@ API Token = 與 DEVICE_TOKEN 相同，若 server 未設定 token 可留空
 esp32c3_alarm_external_api_complete/esp32c3_alarm_external_api_complete.ino
 ```
 
-確認：
+建議先複製 secrets 範例：
+
+```bash
+copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm_external_api_complete\arduino_secrets.h
+```
+
+然後在 `arduino_secrets.h` 設定：
 
 ```cpp
-const char* CONFIG_URL_BASE = "https://esp32-c3-alarm-api.onrender.com/clock";
-const char* STATUS_URL      = "https://esp32-c3-alarm-api.onrender.com/state";
-const char* API_TOKEN       = "";
+#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
+#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
+#define ALARM_CONFIG_URL_BASE "https://esp32-c3-alarm-api.onrender.com/clock"
+#define ALARM_STATUS_URL "https://esp32-c3-alarm-api.onrender.com/state"
+#define ALARM_API_TOKEN ""
 ```
 
 若 API server 有 `DEVICE_TOKEN`，`API_TOKEN` 必須填同一組值。
