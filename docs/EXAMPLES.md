@@ -83,7 +83,7 @@ For no-backend local mode:
 Cloudflare backend:
 
 ```text
-Connection mode: Cloudflare 後端
+Connection mode: Cloudflare backend
 Cloudflare API Base URL: blank, or /api
 Device ID: alarm_c3_001
 ```
@@ -91,10 +91,12 @@ Device ID: alarm_c3_001
 Direct MCU mode:
 
 ```text
-Connection mode: 直接連 MCU
+Connection mode: Direct MCU
 MCU Base URL: http://192.168.x.x
 Local API Token: same as ALARM_LOCAL_API_TOKEN, or blank if not set
 ```
+
+Direct MCU mode is for a local/HTTP dashboard or a development page. A Cloudflare HTTPS page may be blocked from calling `http://192.168.x.x`.
 
 MCU-hosted mode:
 
@@ -102,6 +104,8 @@ MCU-hosted mode:
 Open: http://192.168.x.x/
 The MCU serves a small built-in local dashboard.
 ```
+
+MCU-hosted mode is not selected inside the Cloudflare dashboard. Open the MCU IP directly.
 
 ## curl Tests
 

@@ -46,12 +46,6 @@ const modes = [
     title: '直接連 MCU',
     badge: '無後端',
     summary: 'Web 直接呼叫 MCU 的 /api/local/*，適合同 Wi-Fi 或手機熱點。'
-  },
-  {
-    id: 'mcu',
-    title: 'MCU 開網站',
-    badge: '最簡單',
-    summary: '瀏覽器打開 MCU IP，網站與 API 都由 ESP32-C3 提供。'
   }
 ];
 
@@ -101,22 +95,13 @@ function buildPrompt(mode, deviceId, backendBase, mcuBase) {
     ].join('\n');
   }
 
-  if (mode === 'direct') {
-    return [
-      '請幫我設定 ESP32-C3 鬧鐘專案使用無後端直連模式。',
-      `Device ID: ${deviceId}`,
-      `MCU Base URL: ${mcuBase || 'http://<MCU-IP>'}`,
-      'Web 端呼叫 MCU 的 /api/local/status、/api/local/config、/api/local/command。',
-      'LOCAL_API_TOKEN 存在 MCU 的 arduino_secrets.h；如果有設定，瀏覽器直連時才輸入本機 token。'
-    ].join('\n');
-  }
-
   return [
-    '請幫我設定 ESP32-C3 鬧鐘專案使用 MCU 自架網站模式。',
+    '請幫我設定 ESP32-C3 鬧鐘專案使用無後端直連模式。',
     `Device ID: ${deviceId}`,
-    '瀏覽器直接開 http://<MCU-IP>/',
-    'MCU 提供簡易網站與 /api/local/* API。',
-    '不需要 Cloudflare 後端；LOCAL_API_TOKEN 存在 MCU 的 arduino_secrets.h。'
+    `MCU Base URL: ${mcuBase || 'http://<MCU-IP>'}`,
+    'Web 端呼叫 MCU 的 /api/local/status、/api/local/config、/api/local/command。',
+    'LOCAL_API_TOKEN 存在 MCU 的 arduino_secrets.h；如果有設定，瀏覽器直連時才輸入本機 token。',
+    '如果要 MCU 自己開網站，請不要在這個頁面切換；請直接開 Serial Monitor 顯示的 http://<MCU-IP>/。'
   ].join('\n');
 }
 
@@ -134,14 +119,15 @@ export default function App() {
   const backendBase = useMemo(() => cleanUrl(apiBaseUrl) || '/api', [apiBaseUrl]);
   const mcuBase = useMemo(() => cleanUrl(mcuBaseUrl), [mcuBaseUrl]);
   const localApiBase = useMemo(() => `${mcuBase}/api/local`, [mcuBase]);
-  const activeMode = modes.find((item) => item.id === mode) || modes[0];
+  const connectionMode = modes.some((item) => item.id === mode) ? mode : 'backend';
+  const activeMode = modes.find((item) => item.id === connectionMode) || modes[0];
   const prompt = useMemo(
-    () => buildPrompt(mode, deviceId, backendBase, mcuBase),
-    [mode, deviceId, backendBase, mcuBase]
+    () => buildPrompt(connectionMode, deviceId, backendBase, mcuBase),
+    [connectionMode, deviceId, backendBase, mcuBase]
   );
 
   const endpoints = useMemo(() => {
-    if (mode === 'backend') {
+    if (connectionMode === 'backend') {
       return {
         status: `${backendBase}/web/status?device_id=${encodeURIComponent(deviceId)}`,
         config: `${backendBase}/web/config`,
@@ -154,22 +140,22 @@ export default function App() {
       config: `${localApiBase}/config`,
       command: `${localApiBase}/command`
     };
-  }, [mode, backendBase, localApiBase, deviceId]);
+  }, [connectionMode, backendBase, localApiBase, deviceId]);
 
   useEffect(() => {
-    window.localStorage.setItem('connectionMode', mode);
+    window.localStorage.setItem('connectionMode', connectionMode);
     window.localStorage.setItem('apiBaseUrl', apiBaseUrl);
     window.localStorage.setItem('mcuBaseUrl', mcuBaseUrl);
     window.localStorage.setItem('localToken', localToken);
     window.localStorage.setItem('deviceId', deviceId);
-  }, [mode, apiBaseUrl, mcuBaseUrl, localToken, deviceId]);
+  }, [connectionMode, apiBaseUrl, mcuBaseUrl, localToken, deviceId]);
 
   function requestHeaders() {
     const next = {
       'Content-Type': 'application/json'
     };
 
-    if (mode !== 'backend' && localToken.trim()) {
+    if (connectionMode !== 'backend' && localToken.trim()) {
       next['X-Local-Token'] = localToken.trim();
     }
 
@@ -190,10 +176,15 @@ export default function App() {
   }
 
   async function refreshStatus() {
+    if (connectionMode === 'direct' && !mcuBase) {
+      addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。MCU 自架網站請直接開 MCU IP。');
+      return;
+    }
+
     setBusy(true);
     try {
       const response = await fetch(endpoints.status, {
-        headers: mode === 'backend' ? undefined : requestHeaders()
+        headers: connectionMode === 'backend' ? undefined : requestHeaders()
       });
 
       if (!response.ok) {
@@ -212,6 +203,11 @@ export default function App() {
   }
 
   async function updateConfig(patch) {
+    if (connectionMode === 'direct' && !mcuBase) {
+      addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。');
+      return;
+    }
+
     const next = {
       ...config,
       ...patch,
@@ -239,6 +235,11 @@ export default function App() {
   }
 
   async function sendCommand(command) {
+    if (connectionMode === 'direct' && !mcuBase) {
+      addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。');
+      return;
+    }
+
     try {
       const response = await fetch(endpoints.command, {
         method: 'POST',
@@ -275,7 +276,7 @@ export default function App() {
     refreshStatus();
     const timer = window.setInterval(refreshStatus, 15000);
     return () => window.clearInterval(timer);
-  }, [endpoints.status, mode, localToken]);
+  }, [endpoints.status, connectionMode, localToken]);
 
   const alarmTime = `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 
@@ -416,7 +417,7 @@ export default function App() {
                   type="button"
                   onClick={() => setMode(item.id)}
                   className={`rounded border p-3 text-left ${
-                    mode === item.id
+                    connectionMode === item.id
                       ? 'border-cyan-500 bg-cyan-500/10'
                       : 'border-neutral-800 bg-neutral-950 hover:bg-neutral-800'
                   }`}
@@ -432,14 +433,20 @@ export default function App() {
 
             <div className="mt-4 space-y-3">
               <TextField label="Device ID" value={deviceId} onChange={setDeviceId} />
-              {mode === 'backend' ? (
+              {connectionMode === 'backend' ? (
                 <TextField label="Cloudflare API Base URL" value={apiBaseUrl} onChange={setApiBaseUrl} placeholder="留空使用同源 /api" />
               ) : (
                 <>
-                  <TextField label="MCU Base URL" value={mcuBaseUrl} onChange={setMcuBaseUrl} placeholder="留空代表 MCU 自架網站" />
+                  <TextField label="MCU Base URL" value={mcuBaseUrl} onChange={setMcuBaseUrl} placeholder="例如 http://192.168.1.23" />
                   <TextField label="Local API Token" value={localToken} onChange={setLocalToken} placeholder="留空代表 MCU 未啟用本機 token" />
                 </>
               )}
+            </div>
+
+            <div className="mt-4 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+              MCU 自架網站不是這裡的切換選項。燒錄後請看 Serial Monitor 的
+              <span className="font-mono"> [LocalAPI] Listening at http://192.168.x.x/ </span>
+              ，再直接用瀏覽器開那個內網 IP。
             </div>
 
             <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-300">

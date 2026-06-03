@@ -38,6 +38,8 @@ Cloudflare stores `DEVICE_TOKEN`. The browser does not store it.
 
 Use this when the Web UI is hosted anywhere static, but the browser is on the same network as the ESP32-C3.
 
+Important: a Cloudflare Pages site is served over HTTPS, while the ESP32-C3 local API is usually HTTP. Many browsers block HTTPS pages from calling `http://192.168.x.x` because of mixed-content and local-network rules. Direct MCU mode works best from `localhost`, a local HTTP page, or the MCU-hosted page.
+
 ```text
 Self-hosted Web UI -> ESP32-C3 /api/local/*
 ```
@@ -82,6 +84,8 @@ After the MCU connects to Wi-Fi, open the IP printed in Serial Monitor:
 ```text
 [LocalAPI] Listening at http://192.168.x.x/
 ```
+
+This is not a switch inside the Cloudflare-hosted dashboard. You leave the Cloudflare page and open the MCU's local IP directly.
 
 ## Choosing a Mode
 
