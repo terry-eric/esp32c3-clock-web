@@ -99,6 +99,9 @@ Tuning knobs in `arduino_secrets.h`:
 #define ALARM_WIFI_CONNECT_TIMEOUT_MS 12000UL
 #define ALARM_WIFI_RETRY_INTERVAL_MS 60000UL
 #define ALARM_WIFI_RETRY_MAX_INTERVAL_MS 300000UL
+#define ALARM_WIFI_AUTH_FAST_RETRY_MS 15000UL
+#define ALARM_WIFI_AUTH_FAST_RETRY_MAX 3
+#define ALARM_WIFI_MIN_SECURITY WIFI_AUTH_WPA_PSK
 ```
 
 If the device still sometimes cannot connect:
@@ -106,6 +109,8 @@ If the device still sometimes cannot connect:
 - Raise `ALARM_WIFI_CONNECT_TX_POWER` one step.
 - Increase `ALARM_WIFI_CONNECT_TIMEOUT_MS` to `15000UL` or `20000UL` for slow phone hotspots.
 - Keep `ALARM_WIFI_RETRY_INTERVAL_MS` long enough to avoid repeated high-power connection attempts.
+- `STA_DISCONNECTED reason=2` means auth expired. The firmware now treats this as a short fast retry case before falling back to long exponential retry.
+- If your router is strictly WPA2-only and you want stricter security, set `ALARM_WIFI_MIN_SECURITY WIFI_AUTH_WPA2_PSK`. The default `WIFI_AUTH_WPA_PSK` is more compatible with WPA/WPA2 mixed hotspots.
 
 If battery/power is more important than fast reconnect:
 

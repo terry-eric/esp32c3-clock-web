@@ -151,6 +151,18 @@ const char* WIFI_PASS = ALARM_WIFI_PASS;
 #define ALARM_WIFI_RETRY_MAX_INTERVAL_MS 300000UL
 #endif
 
+#ifndef ALARM_WIFI_AUTH_FAST_RETRY_MS
+#define ALARM_WIFI_AUTH_FAST_RETRY_MS 15000UL
+#endif
+
+#ifndef ALARM_WIFI_AUTH_FAST_RETRY_MAX
+#define ALARM_WIFI_AUTH_FAST_RETRY_MAX 3
+#endif
+
+#ifndef ALARM_WIFI_MIN_SECURITY
+#define ALARM_WIFI_MIN_SECURITY WIFI_AUTH_WPA_PSK
+#endif
+
 const bool WIFI_SLEEP = ALARM_WIFI_SLEEP;
 
 // 每一台裝置都要不同 ID。
@@ -242,6 +254,7 @@ const bool TOUCH_ACTIVE_HIGH = false;
 const unsigned long WIFI_CONNECT_TIMEOUT_MS       = ALARM_WIFI_CONNECT_TIMEOUT_MS;
 const unsigned long WIFI_RETRY_INTERVAL_MS        = ALARM_WIFI_RETRY_INTERVAL_MS;
 const unsigned long WIFI_RETRY_MAX_INTERVAL_MS    = ALARM_WIFI_RETRY_MAX_INTERVAL_MS;
+const unsigned long WIFI_AUTH_FAST_RETRY_MS       = ALARM_WIFI_AUTH_FAST_RETRY_MS;
 const unsigned long SYNC_INTERVAL_MS              = 60000;
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
 
@@ -308,6 +321,8 @@ unsigned long lastWifiTryMs = 0;
 uint8_t wifiFailCount = 0;
 bool localApiStarted = false;
 bool wifiRadioOffBetweenRetries = false;
+uint8_t wifiAuthFastRetryCount = 0;
+int lastWiFiDisconnectReason = 0;
 
 unsigned long lastSyncMs = 0;
 unsigned long lastHeartbeatPrintMs = 0;
@@ -505,11 +520,14 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
       WiFi.setSleep(WIFI_SLEEP);
       WiFi.setTxPower(ALARM_WIFI_TX_POWER);
       wifiFailCount = 0;
+      wifiAuthFastRetryCount = 0;
+      lastWiFiDisconnectReason = 0;
       wifiRadioOffBetweenRetries = false;
       break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+      lastWiFiDisconnectReason = info.wifi_sta_disconnected.reason;
       Serial.print("[WiFiEvent] STA_DISCONNECTED reason=");
-      Serial.println(info.wifi_sta_disconnected.reason);
+      Serial.println(lastWiFiDisconnectReason);
       break;
     default:
       break;
@@ -526,6 +544,10 @@ void stopWiFiUntilNextRetry() {
 }
 
 unsigned long currentWifiRetryIntervalMs() {
+  if (lastWiFiDisconnectReason == 2 && wifiAuthFastRetryCount < ALARM_WIFI_AUTH_FAST_RETRY_MAX) {
+    return WIFI_AUTH_FAST_RETRY_MS;
+  }
+
   unsigned long interval = WIFI_RETRY_INTERVAL_MS;
   for (uint8_t i = 0; i < wifiFailCount && interval < WIFI_RETRY_MAX_INTERVAL_MS; i++) {
     interval *= 2;
@@ -534,6 +556,21 @@ unsigned long currentWifiRetryIntervalMs() {
     }
   }
   return interval;
+}
+
+void recordWiFiConnectFailure() {
+  if (lastWiFiDisconnectReason == 2 && wifiAuthFastRetryCount < ALARM_WIFI_AUTH_FAST_RETRY_MAX) {
+    wifiAuthFastRetryCount++;
+    Serial.print("[WiFi] Auth expire fast retry ");
+    Serial.print(wifiAuthFastRetryCount);
+    Serial.print("/");
+    Serial.println(ALARM_WIFI_AUTH_FAST_RETRY_MAX);
+    return;
+  }
+
+  if (wifiFailCount < 5) {
+    wifiFailCount++;
+  }
 }
 
 void startWiFiConnect() {
@@ -548,7 +585,7 @@ void startWiFiConnect() {
   WiFi.setSleep(false);
   WiFi.setTxPower(ALARM_WIFI_CONNECT_TX_POWER);
   WiFi.setAutoReconnect(false);
-  WiFi.setMinSecurity(WIFI_AUTH_WPA2_PSK);
+  WiFi.setMinSecurity(ALARM_WIFI_MIN_SECURITY);
 
   // 清掉舊狀態，避免 sta is connecting 重複錯誤
   Serial.print("[WiFi] Connecting to ");
@@ -560,6 +597,8 @@ void startWiFiConnect() {
   Serial.println((int)ALARM_WIFI_CONNECT_TX_POWER);
   Serial.print("[WiFi] Steady TX power enum = ");
   Serial.println((int)ALARM_WIFI_TX_POWER);
+  Serial.print("[WiFi] Min security enum = ");
+  Serial.println((int)ALARM_WIFI_MIN_SECURITY);
   Serial.print("[WiFi] Retry wait after failure = ");
   Serial.print(currentWifiRetryIntervalMs() / 1000);
   Serial.println(" sec");
@@ -593,9 +632,7 @@ void maintainWiFi() {
     Serial.print(" (");
     Serial.print(wifiStatusToString(WiFi.status()));
     Serial.println(")");
-    if (wifiFailCount < 5) {
-      wifiFailCount++;
-    }
+    recordWiFiConnectFailure();
     lastWifiTryMs = millis();
     stopWiFiUntilNextRetry();
     return;
@@ -645,9 +682,7 @@ bool waitWiFiConnected(unsigned long timeoutMs) {
   Serial.print(" (");
   Serial.print(wifiStatusToString(WiFi.status()));
   Serial.println(")");
-  if (wifiFailCount < 5) {
-    wifiFailCount++;
-  }
+  recordWiFiConnectFailure();
   lastWifiTryMs = millis();
   stopWiFiUntilNextRetry();
   return false;
