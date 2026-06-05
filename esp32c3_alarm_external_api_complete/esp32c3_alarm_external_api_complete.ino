@@ -44,9 +44,11 @@
       "snoozeMin": 5,
       "maxRingSec": 10,
       "hapticEffect": 10,
-      "ledPairBrightness": 10,
+      "ledPairBrightness": 4,
       "flashLedBrightness": 10,
       "version": 12,
+      "commandId": 0,
+      "command": "none",
       "signature": "..."
     }
 
@@ -65,7 +67,13 @@
 
   Signature payload:
 
-    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|ledPairBrightness|flashLedBrightness|version
+    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|ledPairBrightness|flashLedBrightness|version|commandId|command
+
+  USB serial commands at 115200:
+
+    notify_done 10
+    test_led
+    test_haptic 10
 */
 
 #include <WiFi.h>
@@ -94,6 +102,10 @@
 // Wi-Fi
 #ifndef ALARM_WIFI_SSID
 #define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
+#endif
+
+#ifndef ALARM_BOOT_STABILIZE_MS
+#define ALARM_BOOT_STABILIZE_MS 1000UL
 #endif
 
 #ifndef ALARM_WIFI_PASS
@@ -253,6 +265,7 @@ const unsigned long WIFI_CONNECT_TIMEOUT_MS       = ALARM_WIFI_CONNECT_TIMEOUT_M
 const unsigned long WIFI_RETRY_INTERVAL_MS        = ALARM_WIFI_RETRY_INTERVAL_MS;
 const unsigned long WIFI_RETRY_MAX_INTERVAL_MS    = ALARM_WIFI_RETRY_MAX_INTERVAL_MS;
 const unsigned long WIFI_AUTH_FAST_RETRY_MS       = ALARM_WIFI_AUTH_FAST_RETRY_MS;
+const unsigned long WIFI_AUTH_FAIL_SETTLE_MS      = 1000UL;
 const unsigned long SYNC_INTERVAL_MS              = 60000;
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
 
@@ -284,7 +297,7 @@ struct AlarmConfig {
   int snoozeMin = 5;
   int maxRingSec = 10;
   int hapticEffect = 10;
-  int ledPairBrightness = 10;
+  int ledPairBrightness = 4;
   int flashLedBrightness = 10;
   int version = 0;
 };
@@ -323,6 +336,7 @@ bool localApiStarted = false;
 bool wifiRadioOffBetweenRetries = false;
 uint8_t wifiAuthFastRetryCount = 0;
 int lastWiFiDisconnectReason = 0;
+unsigned long lastWiFiDisconnectMs = 0;
 
 unsigned long lastSyncMs = 0;
 unsigned long lastHeartbeatPrintMs = 0;
@@ -335,6 +349,8 @@ time_t snoozeUntil = 0;
 
 int lastCommandId = 0;
 String lastAction = "BOOT";
+
+bool isAllowedLocalCommand(const String& command);
 
 // Button debounce
 bool stableButtonNow = false;
@@ -487,7 +503,7 @@ void loadConfigFromNVS() {
   alarmConfig.snoozeMin = prefs.getInt("snoozeMin", 5);
   alarmConfig.maxRingSec = prefs.getInt("maxRingSec", 10);
   alarmConfig.hapticEffect = prefs.getInt("effect", 10);
-  alarmConfig.ledPairBrightness = prefs.getInt("ledPair", 10);
+  alarmConfig.ledPairBrightness = prefs.getInt("ledPair", 4);
   alarmConfig.flashLedBrightness = prefs.getInt("ledFlash", 10);
   alarmConfig.version = prefs.getInt("version", 0);
   lastCommandId = prefs.getInt("lastCmd", 0);
@@ -573,6 +589,7 @@ void onWiFiEvent(WiFiEvent_t event, WiFiEventInfo_t info) {
       break;
     case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
       lastWiFiDisconnectReason = info.wifi_sta_disconnected.reason;
+      lastWiFiDisconnectMs = millis();
       Serial.print("[WiFiEvent] STA_DISCONNECTED reason=");
       Serial.println(lastWiFiDisconnectReason);
       break;
@@ -669,6 +686,15 @@ void maintainWiFi() {
   }
 
   if (wifiConnecting) {
+    if (lastWiFiDisconnectReason == 2 &&
+        millis() - lastWiFiDisconnectMs >= WIFI_AUTH_FAIL_SETTLE_MS) {
+      Serial.println("[WiFi] Auth expired during connect, fast retry later");
+      recordWiFiConnectFailure();
+      lastWifiTryMs = millis();
+      stopWiFiUntilNextRetry();
+      return;
+    }
+
     if (millis() - wifiConnectStartMs < WIFI_CONNECT_TIMEOUT_MS) {
       return;
     }
@@ -891,7 +917,9 @@ String signedConfigPayload(JsonVariantConst doc) {
       !doc["hapticEffect"].is<int>() ||
       !doc["ledPairBrightness"].is<int>() ||
       !doc["flashLedBrightness"].is<int>() ||
-      !doc["version"].is<int>()) {
+      !doc["version"].is<int>() ||
+      !doc["commandId"].is<int>() ||
+      !doc["command"].is<const char*>()) {
     return "";
   }
 
@@ -918,6 +946,10 @@ String signedConfigPayload(JsonVariantConst doc) {
   payload += String(doc["flashLedBrightness"].as<int>());
   payload += "|";
   payload += String(doc["version"].as<int>());
+  payload += "|";
+  payload += String(doc["commandId"].as<int>());
+  payload += "|";
+  payload += String(doc["command"].as<const char*>());
   return payload;
 }
 
@@ -1137,7 +1169,52 @@ bool applyConfigFromJson(JsonVariantConst doc) {
                 alarmConfig.flashLedBrightness,
                 alarmConfig.version);
 
+  int incomingCommandId = doc["commandId"] | lastCommandId;
+  String incomingCommand = String(doc["command"] | "none");
+  int incomingEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
+  executeCommand(incomingCommandId, incomingCommand, incomingEffect);
+
   return true;
+}
+
+void handleUsbCommandLine(String line) {
+  line.trim();
+  if (line.length() == 0) {
+    return;
+  }
+
+  String command = line;
+  int effect = alarmConfig.hapticEffect;
+  int separatorIndex = line.indexOf(' ');
+
+  if (separatorIndex > 0) {
+    command = line.substring(0, separatorIndex);
+    String effectText = line.substring(separatorIndex + 1);
+    effectText.trim();
+    if (effectText.length() > 0) {
+      effect = constrain(effectText.toInt(), 0, 10);
+    }
+  }
+
+  command.trim();
+  if (!isAllowedLocalCommand(command)) {
+    Serial.print("[USB] Unsupported command: ");
+    Serial.println(command);
+    return;
+  }
+
+  Serial.print("[USB] Command: ");
+  Serial.println(command);
+  executeCommand(lastCommandId + 1, command, effect);
+}
+
+void maintainUsbCommands() {
+  if (!Serial.available()) {
+    return;
+  }
+
+  String line = Serial.readStringUntil('\n');
+  handleUsbCommandLine(line);
 }
 
 bool syncConfigFromServer() {
@@ -1447,7 +1524,7 @@ async function refresh(){
     $('minute').value = c.minute ?? 30;
     $('effect').value = c.hapticEffect ?? 10;
     $('snooze').value = c.snoozeMin ?? 5;
-    $('ledPair').value = c.ledPairBrightness ?? 10;
+    $('ledPair').value = c.ledPairBrightness ?? 4;
     $('ledFlash').value = c.flashLedBrightness ?? 10;
     $('repeat').value = c.repeatMask ?? 62;
     $('enabled').checked = Boolean(c.enabled);
@@ -1922,6 +1999,12 @@ void printHeartbeat() {
 void setup() {
   Serial.begin(115200);
   delay(600);
+  if (ALARM_BOOT_STABILIZE_MS > 0) {
+    Serial.print("[BOOT] Stabilize power before WiFi = ");
+    Serial.print(ALARM_BOOT_STABILIZE_MS);
+    Serial.println(" ms");
+    delay(ALARM_BOOT_STABILIZE_MS);
+  }
 
   Serial.println();
   Serial.println("======================================================");
@@ -1969,6 +2052,7 @@ void setup() {
 }
 
 void loop() {
+  maintainUsbCommands();
   maintainWiFi();
   maintainLocalApiServer();
 

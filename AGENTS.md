@@ -1,0 +1,23 @@
+# ESP32-C3 Alarm Project Instructions
+
+After successfully completing a coding task in this project, and only after requested checks, commits, or pushes are finished, notify the ESP32-C3 MCU by running:
+
+```powershell
+python scripts\notify_mcu.py
+```
+
+If `python` is unavailable, try:
+
+```powershell
+py scripts\notify_mcu.py
+```
+
+The notifier supports HTTP/IP, USB serial, and signed cloud JSON modes. Use only these local environment variables:
+
+- `MCU_NOTIFY_MODE`
+- `MCU_NOTIFY_URL`
+- `MCU_NOTIFY_TOKEN`
+- `MCU_NOTIFY_PORT`
+- `MCU_NOTIFY_EFFECT`
+
+Do not print the token. Do not commit real MCU URLs, Wi-Fi details, signing secrets, or local API tokens. If the notification command fails once, summarize the failure and stop.

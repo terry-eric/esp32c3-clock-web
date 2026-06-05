@@ -8,8 +8,10 @@
   "snoozeMin": 5,
   "maxRingSec": 10,
   "hapticEffect": 10,
-  "ledPairBrightness": 10,
+  "ledPairBrightness": 4,
   "flashLedBrightness": 10,
   "version": 1,
-  "signature": "35f46c9e9f355a503951e3e421f0848b5910260de9013e6c6a84d5a1b00b7e65"
+  "commandId": 0,
+  "command": "none",
+  "signature": "5728ea682c65db1b7917450263bdbd67e61eeac5d82b69bcdb7d09c26e48a072"
 }

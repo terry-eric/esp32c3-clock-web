@@ -14,7 +14,9 @@ const SIGNED_FIELDS = [
   'hapticEffect',
   'ledPairBrightness',
   'flashLedBrightness',
-  'version'
+  'version',
+  'commandId',
+  'command'
 ];
 
 function parseArgs(argv) {
@@ -63,6 +65,10 @@ function buildPayload(config) {
     throw new Error('enabled must be a boolean');
   }
 
+  if (typeof config.command !== 'string') {
+    throw new Error('command must be a string');
+  }
+
   return [
     config.deviceId,
     config.enabled ? '1' : '0',
@@ -75,7 +81,9 @@ function buildPayload(config) {
     requiredZeroToTen(config, 'hapticEffect'),
     requiredZeroToTen(config, 'ledPairBrightness'),
     requiredZeroToTen(config, 'flashLedBrightness'),
-    requiredZeroToTen(config, 'version')
+    requiredZeroToTen(config, 'version'),
+    requiredNumber(config, 'commandId'),
+    config.command
   ].join('|');
 }
 

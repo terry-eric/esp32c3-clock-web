@@ -4,4 +4,6 @@ dist/
 .env.*
 !.env.example
 *.log
+__pycache__/
+*.pyc
 esp32c3_alarm_external_api_complete/arduino_secrets.h

@@ -10,9 +10,11 @@ const defaultConfig = {
   snoozeMin: 5,
   maxRingSec: 10,
   hapticEffect: 10,
-  ledPairBrightness: 10,
+  ledPairBrightness: 4,
   flashLedBrightness: 10,
-  version: 1
+  version: 1,
+  commandId: 0,
+  command: 'none'
 };
 
 const days = [
@@ -43,7 +45,9 @@ function signedPayload(config) {
     config.hapticEffect,
     config.ledPairBrightness,
     config.flashLedBrightness,
-    config.version
+    config.version,
+    config.commandId,
+    config.command
   ].join('|');
 }
 

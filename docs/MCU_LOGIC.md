@@ -98,6 +98,7 @@ This means the MCU can still run the alarm locally even when Wi-Fi is unavailabl
 Tuning knobs in `arduino_secrets.h`:
 
 ```cpp
+#define ALARM_BOOT_STABILIZE_MS 1000UL
 #define ALARM_WIFI_SLEEP true
 #define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
 #define ALARM_WIFI_CONNECT_TX_POWER WIFI_POWER_15dBm
@@ -124,6 +125,7 @@ flashLedBrightness
 
 If the device still sometimes cannot connect:
 
+- Increase `ALARM_BOOT_STABILIZE_MS` to `2000UL` if USB/battery power or a phone hotspot needs more time immediately after boot.
 - Raise `ALARM_WIFI_CONNECT_TX_POWER` one step.
 - Increase `ALARM_WIFI_CONNECT_TIMEOUT_MS` to `15000UL` or `20000UL` for slow phone hotspots.
 - Keep `ALARM_WIFI_RETRY_INTERVAL_MS` long enough to avoid repeated high-power connection attempts.

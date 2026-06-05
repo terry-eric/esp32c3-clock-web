@@ -6,6 +6,10 @@
 #define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 
+// Wait briefly after boot before WiFi starts. This helps unstable USB/battery
+// power rails and phone hotspots that need a moment before accepting auth.
+#define ALARM_BOOT_STABILIZE_MS 1000UL
+
 #define ALARM_DEVICE_ID "alarm_c3_001"
 
 // No backend is required. The MCU fetches this public signed JSON file.

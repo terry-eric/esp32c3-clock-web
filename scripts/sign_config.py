@@ -20,6 +20,8 @@ SIGNED_FIELDS = [
     "ledPairBrightness",
     "flashLedBrightness",
     "version",
+    "commandId",
+    "command",
 ]
 
 
@@ -44,6 +46,9 @@ def build_payload(config):
     if not isinstance(config.get("enabled"), bool):
         raise ValueError("enabled must be a boolean")
 
+    if not isinstance(config.get("command"), str):
+        raise ValueError("command must be a string")
+
     return "|".join(
         [
             config["deviceId"],
@@ -58,6 +63,8 @@ def build_payload(config):
             require_zero_to_ten(config, "ledPairBrightness"),
             require_zero_to_ten(config, "flashLedBrightness"),
             require_zero_to_ten(config, "version"),
+            require_int(config, "commandId"),
+            config["command"],
         ]
     )
 
