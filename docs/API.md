@@ -35,7 +35,7 @@ usb_time_ok
 usb_time_rejected
 ```
 
-The web console uses Web Serial in Chrome or Edge to send the same commands.
+The web console uses Web Serial in Chrome or Edge to send the same commands. It sends `set_time` on connect and once per hour while USB stays connected.
 
 ## Persisted Settings
 
@@ -43,10 +43,11 @@ When `set_config` changes alarm/output settings, the MCU saves them to ESP32 NVS
 
 ## Legacy HTTP/Cloud
 
-The firmware still contains local HTTP and signed static JSON support for reference, but the starter config sets:
+The repository still contains old local HTTP and signed static JSON references, but the current MCU runtime keeps Wi-Fi off and the starter config sets:
 
 ```cpp
 #define ALARM_ENABLE_CLOUD_SYNC false
+#define ALARM_ENABLE_LOCAL_API false
 ```
 
-Use USB unless you intentionally re-enable Wi-Fi/cloud sync.
+Use USB for config, commands, and time sync.

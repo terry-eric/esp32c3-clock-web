@@ -24,14 +24,13 @@ copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm
 Edit only `arduino_secrets.h`:
 
 ```cpp
-#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
-#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #define ALARM_DEVICE_ID "alarm_c3_001"
 #define ALARM_DEVICE_NAME "Codex Done Light"
 #define ALARM_ENABLE_CLOUD_SYNC false
+#define ALARM_ENABLE_LOCAL_API false
 ```
 
-`ALARM_ENABLE_CLOUD_SYNC` is off in the starter setup. Control is done over USB. Do not commit `arduino_secrets.h`.
+Wi-Fi is disabled in the firmware runtime. Control and time sync are done over USB. Do not commit `arduino_secrets.h`.
 
 ## USB Console
 
@@ -41,6 +40,8 @@ Open the web console in Chrome or Edge, press `Connect`, choose the ESP32-C3 ser
 - `Apply` to save alarm/output settings to MCU NVS
 - `Done alert` to flash/vibrate immediately
 - `Test LEDs` and `Test haptic` for hardware checks
+
+After the USB console connects, it automatically syncs the MCU clock once per hour while the page stays connected.
 
 The MCU accepts these USB serial commands at `115200` baud:
 
@@ -78,13 +79,7 @@ Leave `MCU_NOTIFY_PORT` empty to auto-detect the MCU with `codex_ping`. Set it t
 
 ## Legacy Signed Config
 
-The repo still includes `public/devices/alarm_c3_001.json` and signing scripts as a reference. The checked-in sample uses the public demo secret:
-
-```text
-demo-only-change-me
-```
-
-That value is intentionally public and insecure. Use it only to confirm the sample JSON and example firmware settings match. If you re-enable cloud sync, replace the secret with your own private random value and re-sign the JSON.
+The repo still includes `public/devices/alarm_c3_001.json` and signing scripts as an old reference. The current firmware runtime does not use Wi-Fi/cloud sync.
 
 ## Cloudflare Pages
 

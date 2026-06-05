@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const defaultConfig = {
   enabled: true,
@@ -86,6 +86,16 @@ export default function App() {
 
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
+
+  useEffect(() => {
+    if (!usbState.connected) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      syncUsbTime({ quiet: true }).catch(() => {});
+    }, 60 * 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [usbState.connected]);
 
   function bumpVersion(patch = {}) {
     setConfig((current) => ({
@@ -190,16 +200,18 @@ export default function App() {
     }
   }
 
-  async function syncUsbTime() {
+  async function syncUsbTime(options = {}) {
     try {
       const epochSeconds = Math.floor(Date.now() / 1000);
       await writeUsbLine(`set_time ${epochSeconds}`);
       const reply = await readUsbReply('usb_time_', 1800);
-      setUsbState((current) => ({
-        ...current,
-        label: reply.includes('usb_time_ok') ? 'Time synced' : 'Time sent',
-        detail: reply || `set_time ${epochSeconds}`
-      }));
+      if (!options.quiet) {
+        setUsbState((current) => ({
+          ...current,
+          label: reply.includes('usb_time_ok') ? 'Time synced' : 'Time sent',
+          detail: reply || `set_time ${epochSeconds}`
+        }));
+      }
     } catch (error) {
       setUsbState((current) => ({
         ...current,
@@ -207,6 +219,7 @@ export default function App() {
         label: 'Time sync failed',
         detail: error.message
       }));
+      throw error;
     }
   }
 

@@ -6,8 +6,7 @@ The starter firmware is USB-first:
 - Run the alarm state machine and hardware outputs.
 - Accept config and commands over USB serial.
 - Accept time updates over USB serial.
-- Optionally maintain Wi-Fi for the legacy local API if credentials are configured.
-- Keep legacy signed JSON cloud sync available, but disabled by default.
+- Keep Wi-Fi off during runtime.
 
 ## Startup Flow
 
@@ -16,16 +15,11 @@ flowchart TD
   A["Power on / reset"] --> B["Init Serial, GPIO, LEDs"]
   B --> C["Load config from NVS"]
   C --> D["Init DRV2605L over I2C"]
-  D --> E["Start Wi-Fi connection window"]
-  E --> F{"Wi-Fi connected?"}
-  F -- "Yes" --> G["Start local MCU Web/API"]
-  G --> I["Continue USB-controlled operation"]
-  F -- "No" --> J["Continue local alarm logic"]
-  I --> K{"Time OK and driver OK?"}
-  J --> K
-  K -- "Yes" --> L["Enter IDLE"]
-  K -- "No time" --> M["Enter TIME_INVALID until time is available"]
-  K -- "Driver failed" --> N["Enter DRV_FAIL"]
+  D --> E["Turn Wi-Fi off"]
+  E --> F{"Time OK and driver OK?"}
+  F -- "Yes" --> G["Enter IDLE"]
+  F -- "No time" --> H["Enter TIME_INVALID until USB time sync"]
+  F -- "Driver failed" --> I["Enter DRV_FAIL"]
 ```
 
 ## Main Loop
@@ -33,14 +27,12 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["loop()"] --> B["Read USB serial commands"]
-  B --> C["Maintain Wi-Fi if available"]
-  C --> D["Handle local MCU Web/API request"]
-  D --> E["Update button"]
-  E --> F["Update alarm state machine"]
-  F --> G["Update LED pattern"]
-  G --> H["Print heartbeat if due"]
-  H --> I["delay 5 ms"]
-  I --> A
+  B --> C["Update button"]
+  C --> D["Update alarm state machine"]
+  D --> E["Update LED pattern"]
+  E --> F["Print heartbeat if due"]
+  F --> G["delay 5 ms"]
+  G --> A
 ```
 
 ## USB Commands
@@ -57,11 +49,11 @@ set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightne
 ```
 
 `set_config` applies the provided alarm/output fields, clamps safe ranges, and writes changed settings to NVS.
-`set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. This replaces NTP for normal use.
+`set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. The web console sends it on connect and once per hour while USB stays connected.
 
 ## Persisted Settings
 
-When USB `set_config` or the local MCU API changes alarm/output settings, the MCU saves the new config to ESP32 NVS (`Preferences`) so it survives reboot and power loss. Unchanged payloads skip the NVS write to reduce flash wear.
+When USB `set_config` changes alarm/output settings, the MCU saves the new config to ESP32 NVS (`Preferences`) so it survives reboot and power loss. Unchanged payloads skip the NVS write to reduce flash wear.
 
 Persisted values:
 
@@ -84,15 +76,4 @@ lastCommandId
 
 ## Wi-Fi Notes
 
-Wi-Fi is no longer required for control or time sync. Time is set over USB. Wi-Fi can still be useful for the optional local HTTP API. Starter config disables cloud sync:
-
-```cpp
-#define ALARM_ENABLE_CLOUD_SYNC false
-```
-
-If the device has trouble connecting to Wi-Fi:
-
-- Increase `ALARM_BOOT_STABILIZE_MS` to `2000UL`.
-- Raise `ALARM_WIFI_CONNECT_TX_POWER` one step.
-- Increase `ALARM_WIFI_CONNECT_TIMEOUT_MS` to `15000UL` or `20000UL`.
-- Keep `ALARM_WIFI_RETRY_INTERVAL_MS` long enough to avoid repeated high-power connection attempts.
+The MCU turns Wi-Fi off during setup and does not retry network connections. Use USB for config, commands, and time sync.

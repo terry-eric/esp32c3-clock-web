@@ -1,5 +1,5 @@
 /*
-  ESP32-C3 Super Mini Alarm Device - External Website/API Control Version
+  ESP32-C3 Super Mini Alarm Device - USB Control Version
 
   Hardware:
     ESP32-C3 Super Mini
@@ -22,35 +22,8 @@
     Serial Monitor: 115200
 
   ------------------------------------------------------------
-  Signed static website config
+  USB serial control
   ------------------------------------------------------------
-
-  MCU periodically fetches a public static JSON file:
-
-    GET https://YOUR_SITE/devices/alarm_c3_001.json
-
-  The JSON is public, but the MCU only applies it when the HMAC-SHA256
-  signature matches ALARM_CONFIG_HMAC_SECRET from arduino_secrets.h.
-
-  Expected JSON:
-
-    {
-      "deviceId": "alarm_c3_001",
-      "enabled": true,
-      "hour": 7,
-      "minute": 30,
-      "repeatMask": 62,
-      "prealertSec": 10,
-      "snoozeMin": 5,
-      "maxRingSec": 10,
-      "hapticEffect": 10,
-      "ledPairBrightness": 4,
-      "flashLedBrightness": 10,
-      "version": 12,
-      "commandId": 0,
-      "command": "none",
-      "signature": "..."
-    }
 
   repeatMask:
     bit0 = Sunday
@@ -65,12 +38,10 @@
     62  = Monday to Friday
     65  = Saturday + Sunday
 
-  Signature payload:
-
-    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|ledPairBrightness|flashLedBrightness|version|commandId|command
-
   USB serial commands at 115200:
 
+    set_time 1780702200
+    set_config {"enabled":true,"hour":7,"minute":30,...}
     notify_done 10
     test_led
     test_haptic 10
@@ -218,7 +189,7 @@ const bool CLOUD_SYNC_ENABLED = ALARM_ENABLE_CLOUD_SYNC;
 const char* API_TOKEN = ALARM_API_TOKEN;
 
 #ifndef ALARM_ENABLE_LOCAL_API
-#define ALARM_ENABLE_LOCAL_API true
+#define ALARM_ENABLE_LOCAL_API false
 #endif
 
 #ifndef ALARM_LOCAL_API_TOKEN
@@ -415,6 +386,12 @@ uint8_t brightnessToDuty(int value) {
   return (uint8_t)map(clamped, 0, 10, 0, 255);
 }
 
+uint8_t flashBrightnessToDuty(int value) {
+  static const uint8_t dutyByLevel[] = {0, 4, 8, 14, 24, 38, 58, 88, 130, 185, 255};
+  int clamped = constrain(value, 0, 10);
+  return dutyByLevel[clamped];
+}
+
 void writePwmPin(uint8_t pin, uint8_t channel, uint8_t duty) {
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
   ledcWrite(pin, duty);
@@ -447,7 +424,7 @@ void writeLedB(bool on) {
 }
 
 void writeLedFlash(bool on) {
-  writePwmPin(PIN_LED_FLASH, LED_F_PWM_CHANNEL, on ? brightnessToDuty(alarmConfig.flashLedBrightness) : 0);
+  writePwmPin(PIN_LED_FLASH, LED_F_PWM_CHANNEL, on ? flashBrightnessToDuty(alarmConfig.flashLedBrightness) : 0);
 }
 
 void allLedOff() {
@@ -2097,27 +2074,17 @@ void printHeartbeat() {
   bool ok = getLocalTimeSafe(&t);
 
   if (ok) {
-    Serial.printf("[HB] %04d-%02d-%02d %02d:%02d:%02d, state=%s, WiFi=%s, RSSI=%d, DRV=%s, alarm=%02d:%02d, ver=%d\n",
+    Serial.printf("[HB] %04d-%02d-%02d %02d:%02d:%02d, state=%s, USB=time, DRV=%s, alarm=%02d:%02d, ver=%d\n",
                   t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                   t.tm_hour, t.tm_min, t.tm_sec,
                   stateToString(stateNow).c_str(),
-                  WiFi.status() == WL_CONNECTED ? "OK" : "OFF",
-                  WiFi.status() == WL_CONNECTED ? WiFi.RSSI() : 0,
                   drvOK ? "OK" : "FAIL",
                   alarmConfig.hour,
                   alarmConfig.minute,
                   alarmConfig.version);
   } else {
-    unsigned long retryWaitMs = currentWifiRetryIntervalMs();
-    unsigned long retryElapsedMs = millis() - lastWifiTryMs;
-    unsigned long retryInSec = WiFi.status() == WL_CONNECTED || retryElapsedMs >= retryWaitMs
-                                ? 0
-                                : (retryWaitMs - retryElapsedMs) / 1000;
-
-    Serial.printf("[HB] time invalid, state=%s, WiFi=%s, retryIn=%lus, DRV=%s\n",
+    Serial.printf("[HB] time invalid, state=%s, USB time sync needed, DRV=%s\n",
                   stateToString(stateNow).c_str(),
-                  WiFi.status() == WL_CONNECTED ? "OK" : (wifiRadioOffBetweenRetries ? "RADIO_OFF" : "OFF"),
-                  retryInSec,
                   drvOK ? "OK" : "FAIL");
   }
 }
@@ -2130,7 +2097,7 @@ void setup() {
   Serial.begin(115200);
   delay(600);
   if (ALARM_BOOT_STABILIZE_MS > 0) {
-    Serial.print("[BOOT] Stabilize power before WiFi = ");
+    Serial.print("[BOOT] Stabilize power = ");
     Serial.print(ALARM_BOOT_STABILIZE_MS);
     Serial.println(" ms");
     delay(ALARM_BOOT_STABILIZE_MS);
@@ -2138,13 +2105,14 @@ void setup() {
 
   Serial.println();
   Serial.println("======================================================");
-  Serial.println(" ESP32-C3 Super Mini Alarm - External API Version");
+  Serial.println(" ESP32-C3 Super Mini Alarm - USB Control Version");
   Serial.print(" Device: ");
   Serial.println(DEVICE_NAME);
   Serial.println("======================================================");
 
   setupLocalTimezone();
-  WiFi.onEvent(onWiFiEvent);
+  WiFi.mode(WIFI_OFF);
+  Serial.println("[WiFi] Disabled; USB control only");
 
   pinMode(PIN_LED_A, OUTPUT);
   pinMode(PIN_LED_B, OUTPUT);
@@ -2163,15 +2131,6 @@ void setup() {
   loadConfigFromNVS();
   initDRV2605L();
 
-  setupWiFi();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    setupLocalApiServer();
-    if (CLOUD_SYNC_ENABLED) {
-      syncConfigFromServer();
-    }
-  }
-
   lastSyncMs = millis();
 
   if (!timeOK) {
@@ -2185,21 +2144,10 @@ void setup() {
 
 void loop() {
   maintainUsbCommands();
-  maintainWiFi();
-  maintainLocalApiServer();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    setupLocalApiServer();
-  }
 
   updateButton();
   updateAlarmEngine();
   updateLedPattern();
-
-  if (WiFi.status() == WL_CONNECTED && CLOUD_SYNC_ENABLED && millis() - lastSyncMs >= SYNC_INTERVAL_MS) {
-    lastSyncMs = millis();
-    syncConfigFromServer();
-  }
 
   printHeartbeat();
 
