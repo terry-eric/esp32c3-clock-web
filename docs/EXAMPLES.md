@@ -1,167 +1,45 @@
 # Examples
 
-## Cloudflare Pages
-
-```text
-Project name: esp32c3-clock-web
-Production branch: main
-Build command: npm run build
-Build output directory: dist
-Root directory: /
-```
-
-## Cloudflare KV Binding
-
-```text
-KV namespace name: esp32_alarm_kv
-Binding variable name: ALARM_KV
-```
-
-## Cloudflare Variables / Secrets
-
-```text
-DEVICE_TOKEN=replace-with-a-long-random-token
-REQUIRE_CF_ACCESS=true
-```
-
-Do not put `DEVICE_TOKEN` in frontend code or commit it to GitHub.
-
-## Cloudflare Access
-
-```text
-Application type: Self-hosted
-Application domain: esp32c3-clock-web.pages.dev
-Path: /api/web/*
-Policy: Allow your email
-```
-
-MCU endpoints use `DEVICE_TOKEN`; Web management endpoints use Cloudflare Access.
-
-## Arduino Secrets
-
-File:
-
-```text
-esp32c3_alarm_external_api_complete/arduino_secrets.h
-```
-
-Example:
+## `arduino_secrets.h`
 
 ```cpp
 #pragma once
 
-#define ALARM_WIFI_SSID "MyWiFi"
-#define ALARM_WIFI_PASS "MyWiFiPassword"
-
+#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
+#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #define ALARM_DEVICE_ID "alarm_c3_001"
 
-#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
-#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
-#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
-
-#define ALARM_ENABLE_CLOUD_SYNC true
+#define ALARM_ENABLE_CLOUD_SYNC false
 #define ALARM_ENABLE_LOCAL_API true
 // #define ALARM_LOCAL_API_TOKEN "local-only-token"
 
 #define ALARM_WIFI_SLEEP true
 #define ALARM_WIFI_TX_POWER WIFI_POWER_11dBm
-
-#define ALARM_API_TOKEN "replace-with-cloudflare-DEVICE_TOKEN"
-#define ALARM_HTTPS_INSECURE true
+#define ALARM_WIFI_CONNECT_TX_POWER WIFI_POWER_15dBm
+#define ALARM_WIFI_CONNECT_TIMEOUT_MS 12000UL
+#define ALARM_WIFI_RETRY_INTERVAL_MS 60000UL
+#define ALARM_WIFI_RETRY_MAX_INTERVAL_MS 300000UL
+#define ALARM_WIFI_AUTH_FAST_RETRY_MS 15000UL
+#define ALARM_WIFI_AUTH_FAST_RETRY_MAX 3
+#define ALARM_WIFI_MIN_SECURITY WIFI_AUTH_WPA_PSK
 ```
 
-For no-backend local mode:
-
-```cpp
-#define ALARM_ENABLE_CLOUD_SYNC false
-#define ALARM_ENABLE_LOCAL_API true
-#define ALARM_LOCAL_API_TOKEN "local-only-token"
-```
-
-## Web UI Modes
-
-Cloudflare backend:
+## Web UI
 
 ```text
-Connection mode: Cloudflare backend
-Cloudflare API Base URL: blank, or /api
+MCU Base URL: http://192.168.x.x
+Local API Token: blank, or same as ALARM_LOCAL_API_TOKEN
 Device ID: alarm_c3_001
 ```
 
-Direct MCU mode:
-
-```text
-Connection mode: Direct MCU
-MCU Base URL: http://192.168.x.x
-Local API Token: same as ALARM_LOCAL_API_TOKEN, or blank if not set
-```
-
-Direct MCU mode is for a local/HTTP dashboard or a development page. A Cloudflare HTTPS page may be blocked from calling `http://192.168.x.x`.
-
-MCU-hosted mode:
-
-```text
-Open: http://192.168.x.x/
-The MCU serves a small built-in local dashboard.
-```
-
-MCU-hosted mode is not selected inside the Cloudflare dashboard. Open the MCU IP directly.
-
-## curl Tests
-
-Health:
+## Curl
 
 ```bash
-curl https://esp32c3-clock-web.pages.dev/api/health
+curl "http://192.168.x.x/api/local/status?device_id=alarm_c3_001"
 ```
 
-Cloudflare MCU sync:
-
 ```bash
-curl -X POST "https://esp32c3-clock-web.pages.dev/api/sync" \
+curl -X POST "http://192.168.x.x/api/local/command" \
   -H "Content-Type: application/json" \
-  -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
-  -d "{\"deviceId\":\"alarm_c3_001\",\"online\":true,\"state\":\"IDLE\",\"heap\":200000}"
+  -d '{"deviceId":"alarm_c3_001","command":"test_led"}'
 ```
-
-Cloudflare MCU config:
-
-```bash
-curl -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
-  "https://esp32c3-clock-web.pages.dev/api/clock?device_id=alarm_c3_001"
-```
-
-Cloudflare MCU status:
-
-```bash
-curl -X POST "https://esp32c3-clock-web.pages.dev/api/state" \
-  -H "Content-Type: application/json" \
-  -H "X-Device-Token: replace-with-cloudflare-DEVICE_TOKEN" \
-  -d "{\"deviceId\":\"alarm_c3_001\",\"online\":true,\"state\":\"IDLE\",\"heap\":200000}"
-```
-
-Local MCU status:
-
-```bash
-curl -H "X-Local-Token: local-only-token" \
-  "http://192.168.x.x/api/local/status"
-```
-
-Local MCU config:
-
-```bash
-curl -X POST "http://192.168.x.x/api/local/config" \
-  -H "Content-Type: application/json" \
-  -H "X-Local-Token: local-only-token" \
-  -d "{\"hour\":7,\"minute\":30,\"enabled\":true,\"repeatMask\":62,\"hapticEffect\":17}"
-```
-
-Web command:
-
-```bash
-curl -X POST "https://esp32c3-clock-web.pages.dev/api/web/command" \
-  -H "Content-Type: application/json" \
-  -d "{\"deviceId\":\"alarm_c3_001\",\"command\":\"test_haptic\",\"hapticEffect\":17}"
-```
-
-When `REQUIRE_CF_ACCESS=true`, `/api/web/*` requires Cloudflare Access login, so plain curl may be rejected.

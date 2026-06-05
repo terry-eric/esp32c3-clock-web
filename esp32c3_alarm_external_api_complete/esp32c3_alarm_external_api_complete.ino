@@ -167,7 +167,7 @@ const bool WIFI_SLEEP = ALARM_WIFI_SLEEP;
 
 // 每一台裝置都要不同 ID。
 // 例如第二台改成 alarm_c3_002，第三台改成 alarm_c3_003。
-#ifndef ALARM_DEVICE_ID
+// #ifndef ALARM_DEVICE_ID
 #ifndef ALARM_DEVICE_ID
 #define ALARM_DEVICE_ID "alarm_c3_001"
 #endif
@@ -177,15 +177,15 @@ const char* DEVICE_ID = ALARM_DEVICE_ID;
 // 外部網站 API。
 // 先用 http 比較好測試；如果你的網站是 https，也可以直接填 https://...
 #ifndef ALARM_CONFIG_URL_BASE
-#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
+#define ALARM_CONFIG_URL_BASE "https://example.invalid/api/clock"
 #endif
 
 #ifndef ALARM_STATUS_URL
-#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
+#define ALARM_STATUS_URL "https://example.invalid/api/state"
 #endif
 
 #ifndef ALARM_SYNC_URL
-#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
+#define ALARM_SYNC_URL "https://example.invalid/api/sync"
 #endif
 
 const char* CONFIG_URL_BASE = ALARM_CONFIG_URL_BASE;
@@ -193,14 +193,14 @@ const char* STATUS_URL      = ALARM_STATUS_URL;
 const char* SYNC_URL        = ALARM_SYNC_URL;
 
 #ifndef ALARM_ENABLE_CLOUD_SYNC
-#define ALARM_ENABLE_CLOUD_SYNC true
+#define ALARM_ENABLE_CLOUD_SYNC false
 #endif
 
 const bool CLOUD_SYNC_ENABLED = ALARM_ENABLE_CLOUD_SYNC;
 
 // 可選：如果網站需要簡單 token 驗證，就填入 token。
 // 不需要就保持空字串。
-#ifndef ALARM_API_TOKEN
+// #ifndef ALARM_API_TOKEN
 #ifndef ALARM_API_TOKEN
 #define ALARM_API_TOKEN ""
 #endif
@@ -220,7 +220,7 @@ const char* LOCAL_API_TOKEN = ALARM_LOCAL_API_TOKEN;
 
 // 如果使用 https 且沒有安裝憑證，設 true 會略過憑證驗證。
 // 做專題測試可以先 true；正式產品不建議。
-#ifndef ALARM_HTTPS_INSECURE
+// #ifndef ALARM_HTTPS_INSECURE
 #ifndef ALARM_HTTPS_INSECURE
 #define ALARM_HTTPS_INSECURE true
 #endif

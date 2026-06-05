@@ -8,10 +8,12 @@
 
 #define ALARM_DEVICE_ID "alarm_c3_001"
 
-#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
-#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
-#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
-#define ALARM_ENABLE_CLOUD_SYNC true
+// No backend is required. Cloud sync is disabled by default.
+// Keep these placeholders only if you later add your own private API server.
+#define ALARM_CONFIG_URL_BASE "https://example.invalid/api/clock"
+#define ALARM_STATUS_URL "https://example.invalid/api/state"
+#define ALARM_SYNC_URL "https://example.invalid/api/sync"
+#define ALARM_ENABLE_CLOUD_SYNC false
 
 #define ALARM_ENABLE_LOCAL_API true
 // Leave commented to reuse ALARM_API_TOKEN, or set a different local-only key.
@@ -28,7 +30,7 @@
 #define ALARM_WIFI_AUTH_FAST_RETRY_MAX 3
 #define ALARM_WIFI_MIN_SECURITY WIFI_AUTH_WPA_PSK
 
-// Leave empty when the API server has no DEVICE_TOKEN.
+// Leave empty for no-backend local mode. Do not commit real tokens.
 #define ALARM_API_TOKEN ""
 
 // For production, prefer a trusted HTTPS certificate and set this to false.

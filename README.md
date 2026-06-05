@@ -1,175 +1,96 @@
 # ESP32-C3 Clock Web
 
-這個 repo 整合兩個程式：
+ESP32-C3 鬧鐘控制專案，現在採用 **無後端** 架構：
 
-- MCU 韌體：`esp32c3_alarm_external_api_complete/`
-- Web 控制面板：`src/App.jsx`
+- Cloudflare Pages 只部署 React 靜態前端
+- 前端直接連到 ESP32-C3 的本機 API：`http://<MCU-IP>/api/local/*`
+- WiFi SSID、WiFi 密碼、Local API Token 只放在 `arduino_secrets.h`
+- `arduino_secrets.h` 已被 `.gitignore` 忽略，不會推上 GitHub
 
-建議部署方式是 Cloudflare Pages + Pages Functions：
-
-- 前端：Cloudflare Pages
-- 後端 API：Cloudflare Pages Functions，路徑 `/api/*`
-- 狀態/設定儲存：Cloudflare KV binding `ALARM_KV`
-- 私密 token：Cloudflare Variables and Secrets
-- Web 管理保護：Cloudflare Access
-
-這樣 Web 前端不需要保存 MCU 的 API token，避免 API key/token 洩漏。
-
-## 專案結構
+## Project Layout
 
 ```text
-src/                                  React 前端
-functions/api/[[path]].js             Cloudflare Pages Functions API
-esp32c3_alarm_external_api_complete/  ESP32-C3 Arduino 韌體
-docs/API.md                           API 規格
-docs/CLOUDFLARE_DEPLOY.md             Cloudflare 架設流程
-docs/DEPLOYMENT_MODES.md              後端/無後端/MCU 自架網站模式
-docs/EXAMPLES.md                      設定與 API 範例
-docs/GITHUB_DEPLOY.md                 GitHub repo 操作
-docs/MCU_LOGIC.md                     MCU 開機、連線、鬧鐘流程圖
-docs/SECURITY.md                      安全注意事項
-wrangler.toml                         Cloudflare Pages 設定
+src/                                      React static web UI
+esp32c3_alarm_external_api_complete/      ESP32-C3 Arduino firmware
+esp32c3_alarm_external_api_complete/
+  arduino_secrets.example.h               public placeholder example
+docs/                                     setup and MCU notes
+wrangler.toml                             Cloudflare Pages static config
 ```
 
-## 使用模式
+There is no backend in this repo. The old Cloudflare Pages Functions API was removed.
 
-這個專案可以選擇是否使用後端：
+## Web Setup
 
-```text
-Cloudflare 後端：Web -> Cloudflare -> MCU
-直連 MCU：Web -> MCU /api/local/*
-MCU 自架網站：Browser -> MCU IP
-```
-
-`DEVICE_TOKEN` / `ALARM_LOCAL_API_TOKEN` 都放在 MCU 的 `arduino_secrets.h` 或 Cloudflare Secret，不要 commit 到 GitHub。
-
-詳細差異請看：
-
-```text
-docs/DEPLOYMENT_MODES.md
-```
-
-## API 路徑
-
-MCU 使用：
-
-```text
-POST /api/sync
-GET  /api/clock?device_id=alarm_c3_001
-POST /api/state
-```
-
-New firmware uses `POST /api/sync` first: one request uploads status and receives config/commands. `/api/clock` and `/api/state` remain for older firmware.
-
-Web 使用：
-
-```text
-GET  /api/web/status?device_id=alarm_c3_001
-POST /api/web/config
-POST /api/web/command
-```
-
-Health check：
-
-```text
-GET /api/health
-```
-
-## 本機開發
-
-這台環境目前沒有 `npm`，所以本機未跑完整 build。推到 GitHub 後，CI 會執行：
+Install and build:
 
 ```bash
 npm install
-npm test
 npm run build
 ```
 
-若你的電腦有 Node.js/npm，可本機執行：
+Cloudflare Pages settings:
+
+```text
+Framework preset: None
+Build command: npm run build
+Build output directory: dist
+```
+
+After deploy, open the site and fill:
+
+```text
+MCU Base URL: http://<MCU-IP>
+Local API Token: blank, unless you set ALARM_LOCAL_API_TOKEN
+Device ID: alarm_c3_001
+```
+
+Important browser note: a Cloudflare site is HTTPS. Some browsers block HTTPS pages from calling `http://192.168.x.x`. If that happens, open the MCU local website directly:
+
+```text
+http://<MCU-IP>/
+```
+
+or run the web UI locally with:
 
 ```bash
-npm install
-npm test
-npm run build
 npm run dev
 ```
 
-## Cloudflare 架設摘要
+## MCU Secrets
 
-1. 到 Cloudflare Pages 連接 GitHub repo：
+Copy the example file before flashing:
 
-```text
-https://github.com/terry-eric/esp32c3-clock-web
-```
-
-Cloudflare Pages URL:
-
-```text
-https://esp32c3-clock-web.pages.dev
-```
-
-2. 設定 build：
-
-```text
-Build command: npm run build
-Build output directory: dist
-Root directory: /
-```
-
-3. 建立 KV namespace，並在 Pages project 加 binding：
-
-```text
-Binding name: ALARM_KV
-```
-
-4. 在 Cloudflare Pages 環境變數/secret 設定：
-
-```text
-DEVICE_TOKEN=<給 MCU 用的 token>
-REQUIRE_CF_ACCESS=true
-```
-
-5. 用 Cloudflare Access 保護：
-
-```text
-Path: /api/web/*
-```
-
-MCU 不走 Cloudflare Access，MCU endpoints 用 `DEVICE_TOKEN` 保護。
-
-完整步驟看：
-
-```text
-docs/CLOUDFLARE_DEPLOY.md
-```
-
-## MCU 設定
-
-複製範例：
-
-```bat
+```powershell
 copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm_external_api_complete\arduino_secrets.h
 ```
 
-修改 `arduino_secrets.h`：
+Then edit only `arduino_secrets.h`:
 
 ```cpp
 #define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
-#define ALARM_CONFIG_URL_BASE "https://esp32c3-clock-web.pages.dev/api/clock"
-#define ALARM_STATUS_URL "https://esp32c3-clock-web.pages.dev/api/state"
-#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
-#define ALARM_API_TOKEN "same-as-cloudflare-DEVICE_TOKEN"
+#define ALARM_ENABLE_CLOUD_SYNC false
+#define ALARM_ENABLE_LOCAL_API true
+// #define ALARM_LOCAL_API_TOKEN "local-only-token"
 ```
 
-`arduino_secrets.h` 已被 `.gitignore` 排除，不會推到 GitHub。
+Do not commit `arduino_secrets.h`.
 
-## 範例
+## MCU Local API
 
-看：
+The web UI calls:
 
 ```text
-docs/EXAMPLES.md
+GET  /api/local/status
+POST /api/local/config
+POST /api/local/command
 ```
 
-裡面包含 Cloudflare 設定範例、Arduino secrets 範例、curl API 測試範例。
+When the MCU is online, Serial Monitor prints:
+
+```text
+[LocalAPI] Listening at http://192.168.x.x/
+```
+
+Use that IP in the web UI.

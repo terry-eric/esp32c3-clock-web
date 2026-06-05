@@ -18,7 +18,7 @@ const defaultConfig = {
 const defaultStatus = {
   deviceId: 'alarm_c3_001',
   online: false,
-  state: 'BOOT',
+  state: 'OFFLINE',
   wifiOk: false,
   wifiRssi: 0,
   ip: '',
@@ -34,27 +34,12 @@ const defaultStatus = {
   heap: 0
 };
 
-const modes = [
-  {
-    id: 'backend',
-    title: 'Cloudflare 後端',
-    badge: '安全遠端',
-    summary: 'Web 只呼叫 /api/web/*，MCU 用 DEVICE_TOKEN 同步 /api/sync。'
-  },
-  {
-    id: 'direct',
-    title: '直接連 MCU',
-    badge: '無後端',
-    summary: 'Web 直接呼叫 MCU 的 /api/local/*，適合同 Wi-Fi 或手機熱點。'
-  }
-];
-
 const commands = [
   ['test_led', '測試 LED'],
   ['test_haptic', '測試震動'],
-  ['start_alarm', '啟動鬧鐘'],
+  ['start_alarm', '開始鬧鐘'],
   ['stop_alarm', '停止鬧鐘'],
-  ['snooze', '貪睡']
+  ['snooze', '稍後提醒']
 ];
 
 const days = [
@@ -84,30 +69,19 @@ function statusColor(status) {
   return 'bg-emerald-400';
 }
 
-function buildPrompt(mode, deviceId, backendBase, mcuBase) {
-  if (mode === 'backend') {
-    return [
-      '請幫我設定 ESP32-C3 鬧鐘專案使用 Cloudflare 後端模式。',
-      `Device ID: ${deviceId}`,
-      `Web API Base URL: ${backendBase || '/api'}`,
-      '前端不要保存 DEVICE_TOKEN；Cloudflare Pages Function 使用 DEVICE_TOKEN 保護 /api/sync、/api/clock、/api/state。',
-      'MCU 的 arduino_secrets.h 需要填 ALARM_SYNC_URL 與 ALARM_API_TOKEN。'
-    ].join('\n');
-  }
-
+function buildPrompt(deviceId, mcuBase) {
   return [
     '請幫我設定 ESP32-C3 鬧鐘專案使用無後端直連模式。',
     `Device ID: ${deviceId}`,
     `MCU Base URL: ${mcuBase || 'http://<MCU-IP>'}`,
-    'Web 端呼叫 MCU 的 /api/local/status、/api/local/config、/api/local/command。',
-    'LOCAL_API_TOKEN 存在 MCU 的 arduino_secrets.h；如果有設定，瀏覽器直連時才輸入本機 token。',
-    '如果要 MCU 自己開網站，請不要在這個頁面切換；請直接開 Serial Monitor 顯示的 http://<MCU-IP>/。'
+    'Cloudflare 只部署靜態前端，不使用 Pages Functions、KV 或 DEVICE_TOKEN。',
+    'Web 端直接呼叫 MCU 的 /api/local/status、/api/local/config、/api/local/command。',
+    'WiFi SSID、WiFi 密碼、Local API Token 只放在 MCU 的 arduino_secrets.h，這個檔案不能 commit。',
+    '如果瀏覽器擋 HTTPS 網站呼叫 http://192.168.x.x，請改開 MCU 本機網站 http://<MCU-IP>/，或在本機用 npm run dev 開發頁面。'
   ].join('\n');
 }
 
 export default function App() {
-  const [mode, setMode] = useState(() => readSetting('connectionMode', 'backend'));
-  const [apiBaseUrl, setApiBaseUrl] = useState(() => readSetting('apiBaseUrl', ''));
   const [mcuBaseUrl, setMcuBaseUrl] = useState(() => readSetting('mcuBaseUrl', ''));
   const [localToken, setLocalToken] = useState(() => readSetting('localToken', ''));
   const [deviceId, setDeviceId] = useState(() => readSetting('deviceId', 'alarm_c3_001'));
@@ -116,50 +90,31 @@ export default function App() {
   const [logs, setLogs] = useState([]);
   const [busy, setBusy] = useState(false);
 
-  const backendBase = useMemo(() => cleanUrl(apiBaseUrl) || '/api', [apiBaseUrl]);
   const mcuBase = useMemo(() => cleanUrl(mcuBaseUrl), [mcuBaseUrl]);
-  const localApiBase = useMemo(() => `${mcuBase}/api/local`, [mcuBase]);
-  const connectionMode = modes.some((item) => item.id === mode) ? mode : 'backend';
-  const activeMode = modes.find((item) => item.id === connectionMode) || modes[0];
-  const prompt = useMemo(
-    () => buildPrompt(connectionMode, deviceId, backendBase, mcuBase),
-    [connectionMode, deviceId, backendBase, mcuBase]
+  const localApiBase = useMemo(() => (mcuBase ? `${mcuBase}/api/local` : ''), [mcuBase]);
+  const prompt = useMemo(() => buildPrompt(deviceId, mcuBase), [deviceId, mcuBase]);
+
+  const endpoints = useMemo(
+    () => ({
+      status: localApiBase ? `${localApiBase}/status?device_id=${encodeURIComponent(deviceId)}` : '',
+      config: localApiBase ? `${localApiBase}/config` : '',
+      command: localApiBase ? `${localApiBase}/command` : ''
+    }),
+    [localApiBase, deviceId]
   );
 
-  const endpoints = useMemo(() => {
-    if (connectionMode === 'backend') {
-      return {
-        status: `${backendBase}/web/status?device_id=${encodeURIComponent(deviceId)}`,
-        config: `${backendBase}/web/config`,
-        command: `${backendBase}/web/command`
-      };
-    }
-
-    return {
-      status: `${localApiBase}/status?device_id=${encodeURIComponent(deviceId)}`,
-      config: `${localApiBase}/config`,
-      command: `${localApiBase}/command`
-    };
-  }, [connectionMode, backendBase, localApiBase, deviceId]);
-
   useEffect(() => {
-    window.localStorage.setItem('connectionMode', connectionMode);
-    window.localStorage.setItem('apiBaseUrl', apiBaseUrl);
     window.localStorage.setItem('mcuBaseUrl', mcuBaseUrl);
     window.localStorage.setItem('localToken', localToken);
     window.localStorage.setItem('deviceId', deviceId);
-  }, [connectionMode, apiBaseUrl, mcuBaseUrl, localToken, deviceId]);
+  }, [mcuBaseUrl, localToken, deviceId]);
 
   function requestHeaders() {
-    const next = {
-      'Content-Type': 'application/json'
-    };
-
-    if (connectionMode !== 'backend' && localToken.trim()) {
-      next['X-Local-Token'] = localToken.trim();
+    const headers = { 'Content-Type': 'application/json' };
+    if (localToken.trim()) {
+      headers['X-Local-Token'] = localToken.trim();
     }
-
-    return next;
+    return headers;
   }
 
   function addLog(type, message, data) {
@@ -175,26 +130,24 @@ export default function App() {
     ]);
   }
 
+  function requireMcuUrl() {
+    if (mcuBase) return true;
+    addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。');
+    return false;
+  }
+
   async function refreshStatus() {
-    if (connectionMode === 'direct' && !mcuBase) {
-      addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。MCU 自架網站請直接開 MCU IP。');
-      return;
-    }
+    if (!requireMcuUrl()) return;
 
     setBusy(true);
     try {
-      const response = await fetch(endpoints.status, {
-        headers: connectionMode === 'backend' ? undefined : requestHeaders()
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      const response = await fetch(endpoints.status, { headers: requestHeaders() });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
       setConfig({ ...defaultConfig, ...(data.config || {}) });
       setStatus({ ...defaultStatus, ...(data.status || {}) });
-      addLog('GET', '狀態已更新', data);
+      addLog('GET', '已讀取 MCU 狀態', data);
     } catch (error) {
       addLog('ERR', `讀取失敗：${error.message}`);
     } finally {
@@ -203,80 +156,61 @@ export default function App() {
   }
 
   async function updateConfig(patch) {
-    if (connectionMode === 'direct' && !mcuBase) {
-      addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。');
-      return;
-    }
+    if (!requireMcuUrl()) return;
 
-    const next = {
-      ...config,
-      ...patch,
-      deviceId
-    };
-
+    const next = { ...config, ...patch, deviceId };
     setConfig(next);
+
     try {
       const response = await fetch(endpoints.config, {
         method: 'POST',
         headers: requestHeaders(),
         body: JSON.stringify(next)
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
       setConfig({ ...defaultConfig, ...(data.config || next) });
-      addLog('POST', '設定已送出', next);
+      addLog('POST', '設定已送到 MCU', next);
     } catch (error) {
       addLog('ERR', `設定失敗：${error.message}`);
     }
   }
 
   async function sendCommand(command) {
-    if (connectionMode === 'direct' && !mcuBase) {
-      addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。');
-      return;
-    }
+    if (!requireMcuUrl()) return;
 
     try {
       const response = await fetch(endpoints.command, {
         method: 'POST',
         headers: requestHeaders(),
-        body: JSON.stringify({
-          deviceId,
-          command,
-          hapticEffect: config.hapticEffect
-        })
+        body: JSON.stringify({ deviceId, command, hapticEffect: config.hapticEffect })
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
       setConfig({ ...defaultConfig, ...(data.config || config) });
-      addLog('CMD', `指令已送出：${command}`, data);
+      addLog('CMD', `命令已送出：${command}`, data);
     } catch (error) {
-      addLog('ERR', `指令失敗：${error.message}`);
+      addLog('ERR', `命令失敗：${error.message}`);
     }
   }
 
   async function copyPrompt() {
     try {
       await window.navigator.clipboard.writeText(prompt);
-      addLog('COPY', '提示器內容已複製');
+      addLog('COPY', '已複製 Vibe Coding 提示器');
     } catch (error) {
       addLog('ERR', `複製失敗：${error.message}`);
     }
   }
 
   useEffect(() => {
+    if (!mcuBase) return undefined;
     refreshStatus();
     const timer = window.setInterval(refreshStatus, 15000);
     return () => window.clearInterval(timer);
-  }, [endpoints.status, connectionMode, localToken]);
+  }, [endpoints.status, localToken]);
 
   const alarmTime = `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 
@@ -286,14 +220,14 @@ export default function App() {
         <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-xl font-semibold">ESP32-C3 Alarm Hub</h1>
-            <p className="mt-1 text-sm text-neutral-400">{activeMode.title} · {activeMode.summary}</p>
+            <p className="mt-1 text-sm text-neutral-400">純前端直連 MCU，本專案不包含後端服務或公開 API key。</p>
           </div>
           <button
             type="button"
             onClick={refreshStatus}
             className="h-10 rounded border border-neutral-700 bg-neutral-800 px-4 text-sm font-medium hover:bg-neutral-700"
           >
-            {busy ? '更新中' : '重新整理'}
+            {busy ? '讀取中' : '重新整理'}
           </button>
         </div>
       </section>
@@ -303,7 +237,7 @@ export default function App() {
           <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="text-sm text-neutral-400">目前狀態</p>
+                <p className="text-sm text-neutral-400">裝置狀態</p>
                 <div className="mt-2 flex items-center gap-3">
                   <span className={`h-3 w-3 rounded-full ${statusColor(status)}`} />
                   <span className="text-3xl font-semibold">{status.state}</span>
@@ -318,7 +252,7 @@ export default function App() {
             <div className="mt-5 grid gap-3 sm:grid-cols-4">
               <Info label="Wi-Fi" value={status.wifiOk ? `${status.wifiRssi} dBm` : '離線'} />
               <Info label="IP" value={status.ip || '-'} />
-              <Info label="DRV2605L" value={status.drvOk ? 'OK' : '異常'} />
+              <Info label="DRV2605L" value={status.drvOk ? 'OK' : '未就緒'} />
               <Info label="Heap" value={status.heap ? `${status.heap}` : '-'} />
             </div>
           </div>
@@ -385,13 +319,13 @@ export default function App() {
                   config.enabled ? 'bg-emerald-500 text-neutral-950' : 'bg-neutral-800 text-neutral-300'
                 }`}
               >
-                {config.enabled ? '已啟用' : '已停用'}
+                {config.enabled ? '已啟用' : '已關閉'}
               </button>
             </div>
           </div>
 
           <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">控制指令</h2>
+            <h2 className="text-base font-semibold">快速命令</h2>
             <div className="mt-4 grid gap-2 sm:grid-cols-5">
               {commands.map(([command, label]) => (
                 <button
@@ -409,50 +343,29 @@ export default function App() {
 
         <aside className="space-y-5">
           <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">連線模式</h2>
-            <div className="mt-4 grid gap-2">
-              {modes.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setMode(item.id)}
-                  className={`rounded border p-3 text-left ${
-                    connectionMode === item.id
-                      ? 'border-cyan-500 bg-cyan-500/10'
-                      : 'border-neutral-800 bg-neutral-950 hover:bg-neutral-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold">{item.title}</span>
-                    <span className="text-xs text-neutral-400">{item.badge}</span>
-                  </div>
-                  <p className="mt-1 text-xs text-neutral-400">{item.summary}</p>
-                </button>
-              ))}
-            </div>
-
+            <h2 className="text-base font-semibold">MCU 連線</h2>
             <div className="mt-4 space-y-3">
               <TextField label="Device ID" value={deviceId} onChange={setDeviceId} />
-              {connectionMode === 'backend' ? (
-                <TextField label="Cloudflare API Base URL" value={apiBaseUrl} onChange={setApiBaseUrl} placeholder="留空使用同源 /api" />
-              ) : (
-                <>
-                  <TextField label="MCU Base URL" value={mcuBaseUrl} onChange={setMcuBaseUrl} placeholder="例如 http://192.168.1.23" />
-                  <TextField label="Local API Token" value={localToken} onChange={setLocalToken} placeholder="留空代表 MCU 未啟用本機 token" />
-                </>
-              )}
+              <TextField label="MCU Base URL" value={mcuBaseUrl} onChange={setMcuBaseUrl} placeholder="例如 http://192.168.1.23" />
+              <TextField
+                label="Local API Token"
+                type="password"
+                value={localToken}
+                onChange={setLocalToken}
+                placeholder="留空代表 MCU 未啟用 token"
+              />
             </div>
 
-            <div className="mt-4 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-              MCU 自架網站不是這裡的切換選項。燒錄後請看 Serial Monitor 的
+            <div className="mt-4 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
+              MCU 開機連上 Wi-Fi 後，從 Serial Monitor 找
               <span className="font-mono"> [LocalAPI] Listening at http://192.168.x.x/ </span>
-              ，再直接用瀏覽器開那個內網 IP。
+              ，把那個 IP 填到 MCU Base URL。
             </div>
 
             <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-300">
-              <p>STATUS {endpoints.status}</p>
-              <p>CONFIG {endpoints.config}</p>
-              <p>COMMAND {endpoints.command}</p>
+              <p>STATUS {endpoints.status || '-'}</p>
+              <p>CONFIG {endpoints.config || '-'}</p>
+              <p>COMMAND {endpoints.command || '-'}</p>
             </div>
           </div>
 
@@ -475,7 +388,7 @@ export default function App() {
           </div>
 
           <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">事件紀錄</h2>
+            <h2 className="text-base font-semibold">操作紀錄</h2>
             <div className="mt-4 max-h-[420px] space-y-2 overflow-y-auto">
               {logs.length === 0 ? (
                 <p className="text-sm text-neutral-500">尚無紀錄</p>

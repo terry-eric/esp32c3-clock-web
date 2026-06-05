@@ -5,7 +5,8 @@ The ESP32-C3 firmware has four main jobs:
 - Maintain Wi-Fi with low-power retry behavior.
 - Keep local alarm config in NVS.
 - Run the alarm state machine and hardware outputs.
-- Optionally sync with Cloudflare or serve local MCU APIs.
+- Serve local MCU Web/API endpoints for the static web UI.
+- Optionally call a private external API only if you enable it yourself.
 
 ## Startup Flow
 
@@ -18,9 +19,9 @@ flowchart TD
   E --> F{"Wi-Fi connected?"}
   F -- "Yes" --> G["Start local MCU Web/API"]
   G --> H["Sync NTP time"]
-  H --> I{"Cloud sync enabled?"}
-  I -- "Yes" --> J["POST /api/sync: upload status, receive config"]
-  I -- "No" --> K["Skip cloud sync"]
+  H --> I{"External sync enabled?"}
+  I -- "Yes" --> J["Call private external API"]
+  I -- "No" --> K["Stay local-only"]
   J --> L{"Time OK and driver OK?"}
   K --> L
   F -- "No" --> M["Turn Wi-Fi radio off, wait retry backoff"]
@@ -47,8 +48,8 @@ flowchart TD
   F --> J["Read button"]
   J --> K["Update alarm state machine"]
   K --> L["Update LED pattern"]
-  L --> M{"Cloud sync due?"}
-  M -- "Yes" --> N["POST /api/sync"]
+  L --> M{"External sync due?"}
+  M -- "Yes" --> N["Call private external API"]
   M -- "No" --> O["Print heartbeat if due"]
   N --> O
   O --> P["delay 5 ms"]
@@ -116,4 +117,4 @@ If battery/power is more important than fast reconnect:
 
 - Increase `ALARM_WIFI_RETRY_INTERVAL_MS`.
 - Increase `ALARM_WIFI_RETRY_MAX_INTERVAL_MS`.
-- Disable cloud sync with `ALARM_ENABLE_CLOUD_SYNC false` and use local MCU mode only.
+- Keep `ALARM_ENABLE_CLOUD_SYNC false` and use local MCU mode only.

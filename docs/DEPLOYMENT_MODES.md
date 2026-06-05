@@ -1,98 +1,37 @@
-# Deployment Modes
+# Deployment Mode
 
-This project can run with or without a backend.
+This repo now has one supported mode: no backend, direct MCU control.
 
-## Mode 1: Cloudflare Backend
-
-Use this when you want remote control and do not want the browser to know `DEVICE_TOKEN`.
-
-```text
-Web UI -> Cloudflare Pages Functions/KV <- ESP32-C3
+```mermaid
+flowchart LR
+  A["Static web page"] --> B["ESP32-C3 local IP"]
+  B --> C["MCU local website"]
+  B --> D["/api/local/*"]
 ```
 
-Web UI calls:
+## Options
 
-```text
-GET  /api/web/status
-POST /api/web/config
-POST /api/web/command
-```
+Use either:
 
-MCU calls:
+- Cloudflare Pages static web UI: good for hosting the UI, but browser local-network restrictions may apply.
+- MCU-hosted page: open `http://<MCU-IP>/` directly; best when Cloudflare HTTPS cannot call local HTTP.
+- Local dev page: run `npm run dev` on your computer.
 
-```text
-POST /api/sync
-```
+## What Is Not Used
 
-Secrets:
+- No Cloudflare Pages Functions
+- No Cloudflare KV
+- No `DEVICE_TOKEN`
+- No backend API stored in GitHub
+
+## Secret Storage
+
+Only `arduino_secrets.h` should contain private values:
 
 ```cpp
-#define ALARM_ENABLE_CLOUD_SYNC true
-#define ALARM_SYNC_URL "https://esp32c3-clock-web.pages.dev/api/sync"
-#define ALARM_API_TOKEN "same-as-cloudflare-DEVICE_TOKEN"
+#define ALARM_WIFI_SSID "..."
+#define ALARM_WIFI_PASS "..."
+// #define ALARM_LOCAL_API_TOKEN "..."
 ```
 
-Cloudflare stores `DEVICE_TOKEN`. The browser does not store it.
-
-## Mode 2: Self-hosted Web, Direct MCU API
-
-Use this when the Web UI is hosted anywhere static, but the browser is on the same network as the ESP32-C3.
-
-Important: a Cloudflare Pages site is served over HTTPS, while the ESP32-C3 local API is usually HTTP. Many browsers block HTTPS pages from calling `http://192.168.x.x` because of mixed-content and local-network rules. Direct MCU mode works best from `localhost`, a local HTTP page, or the MCU-hosted page.
-
-```text
-Self-hosted Web UI -> ESP32-C3 /api/local/*
-```
-
-Web UI calls:
-
-```text
-GET  http://<MCU-IP>/api/local/status
-POST http://<MCU-IP>/api/local/config
-POST http://<MCU-IP>/api/local/command
-```
-
-Secrets:
-
-```cpp
-#define ALARM_ENABLE_CLOUD_SYNC false
-#define ALARM_ENABLE_LOCAL_API true
-#define ALARM_LOCAL_API_TOKEN "local-only-token"
-```
-
-The local token is stored in `arduino_secrets.h` on the MCU side. In direct mode the browser must send it as `X-Local-Token` if you set one.
-
-## Mode 3: MCU-hosted Web
-
-Use this for the simplest local setup.
-
-```text
-Browser -> http://<MCU-IP>/ -> ESP32-C3 /api/local/*
-```
-
-Secrets:
-
-```cpp
-#define ALARM_ENABLE_CLOUD_SYNC false
-#define ALARM_ENABLE_LOCAL_API true
-// Optional:
-#define ALARM_LOCAL_API_TOKEN "local-only-token"
-```
-
-After the MCU connects to Wi-Fi, open the IP printed in Serial Monitor:
-
-```text
-[LocalAPI] Listening at http://192.168.x.x/
-```
-
-This is not a switch inside the Cloudflare-hosted dashboard. You leave the Cloudflare page and open the MCU's local IP directly.
-
-## Choosing a Mode
-
-```text
-Need remote control outside local Wi-Fi: Cloudflare Backend
-Need no backend but can reach MCU IP: Self-hosted Web, Direct MCU API
-Need fastest local demo: MCU-hosted Web
-```
-
-Do not commit `arduino_secrets.h`. It may contain Wi-Fi credentials and MCU-side tokens.
+`arduino_secrets.h` is ignored by git.

@@ -1,50 +1,41 @@
-# Security Notes
+# Security
 
-這個 repo 可以公開到 GitHub，但正式推送前請確認不要提交私人資訊。
+This project is designed so private values stay out of GitHub.
 
-## 不要提交的資訊
+## Do Not Commit
 
-- Wi-Fi SSID 與密碼
-- `DEVICE_TOKEN`
-- MCU 的 `API_TOKEN`
-- MCU 的 `ALARM_LOCAL_API_TOKEN`
-- 私人 API domain 的管理密鑰
-- Cloudflare API token 或部署 token
+- WiFi SSID
+- WiFi password
+- `ALARM_LOCAL_API_TOKEN`
+- `arduino_secrets.h`
+- Cloudflare account tokens
 
-## MCU 設定
+## Where Secrets Go
 
-Arduino 主程式目前會自動讀取同資料夾的 `arduino_secrets.h`。請複製範例檔：
-
-```bash
-copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm_external_api_complete\arduino_secrets.h
-```
-
-然後在 `arduino_secrets.h` 填入實際值：
-
-```cpp
-#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
-#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
-#define ALARM_API_TOKEN ""
-```
-
-`arduino_secrets.h` 已被 `.gitignore` 排除，不會被 commit。若檔案不存在，主程式會使用 placeholder 預設值。
-
-## MCU Device Token
-
-若 API server 設定：
+Put private values only in:
 
 ```text
-DEVICE_TOKEN=your-secret-token
+esp32c3_alarm_external_api_complete/arduino_secrets.h
 ```
 
-則 MCU 的 `API_TOKEN` 必須一致。
+This file is ignored by git.
 
-Web UI 不應保存 `DEVICE_TOKEN`。部署到 Cloudflare 時，請使用 Cloudflare Access 保護網站與 `/api/web/*`，讓瀏覽器不需要知道管理 token。
+## Local API Token
 
-Direct MCU mode is different: the browser talks to the MCU directly. If `ALARM_LOCAL_API_TOKEN` is set, the user must enter that local token in the Web UI so it can send `X-Local-Token` to `http://<MCU-IP>/api/local/*`.
+The MCU can protect local API calls with:
 
-## Cloudflare Pages
+```cpp
+#define ALARM_LOCAL_API_TOKEN "local-only-token"
+```
 
-Cloudflare Pages 的前端會存取同源 `/api`。API 必須使用 HTTPS，否則瀏覽器會阻擋請求。
+When enabled, the browser sends:
 
-Web UI 只會把 API Base URL 與 Device ID 存在瀏覽器 localStorage，不保存 API token。
+```text
+X-Local-Token: local-only-token
+```
+
+This protects against casual local-network access, but anyone who controls the same browser can see values they type into the page. For a school project or local prototype this is usually enough; for a product, use a stronger provisioning flow.
+
+## No Backend
+
+There is no server-side secret storage in this repo. Cloudflare Pages hosts static files only.
