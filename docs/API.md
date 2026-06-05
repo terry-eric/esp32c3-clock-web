@@ -73,6 +73,8 @@ The same script can also notify over USB serial with no IP:
 python scripts\notify_mcu.py --mode usb
 ```
 
+The Cloudflare web console can also connect over USB in Chrome or Edge. It shows connected only after the MCU replies to `codex_ping` with `codex_pong`.
+
 For website delivery, use signed cloud mode:
 
 ```powershell

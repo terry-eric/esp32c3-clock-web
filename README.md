@@ -154,6 +154,8 @@ Notification modes:
 - `usb`: auto-detect the Codex MCU over USB serial, no IP needed. Set `MCU_NOTIFY_PORT=COM4` only if you want to force one port.
 - `cloud`: update and sign `public/devices/alarm_c3_001.json`; deploy it, then the MCU runs the command on its next cloud sync.
 
+The web console also has a USB Connect/Send panel. In Chrome or Edge, it uses Web Serial to send `codex_ping` and shows connected only after the MCU replies with `codex_pong`.
+
 Then create:
 
 ```text

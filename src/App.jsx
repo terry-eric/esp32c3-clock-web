@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 const defaultConfig = {
   deviceId: 'alarm_c3_001',
@@ -80,8 +80,19 @@ function formatTime(config) {
   return `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 }
 
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export default function App() {
   const [config, setConfig] = useState(defaultConfig);
+  const [usbState, setUsbState] = useState({
+    connected: false,
+    supported: typeof navigator !== 'undefined' && 'serial' in navigator,
+    label: 'Not connected',
+    detail: 'USB status is unknown until you connect from this browser.'
+  });
+  const serialPortRef = useRef(null);
 
   const publicPath = useMemo(() => `/devices/${config.deviceId}.json`, [config.deviceId]);
   const payload = useMemo(() => signedPayload(config), [config]);
@@ -107,6 +118,98 @@ export default function App() {
       command,
       commandId: current.commandId + 1
     }));
+  }
+
+  async function writeUsbLine(line) {
+    if (!serialPortRef.current || !serialPortRef.current.writable) {
+      throw new Error('USB is not connected.');
+    }
+
+    const writer = serialPortRef.current.writable.getWriter();
+    try {
+      await writer.write(new TextEncoder().encode(`${line}\n`));
+    } finally {
+      writer.releaseLock();
+    }
+  }
+
+  async function readUsbReply(timeoutMs = 1800) {
+    if (!serialPortRef.current || !serialPortRef.current.readable) return '';
+
+    const reader = serialPortRef.current.readable.getReader();
+    const decoder = new TextDecoder();
+    let reply = '';
+    const timeoutId = setTimeout(() => {
+      reader.cancel().catch(() => {});
+    }, timeoutMs);
+
+    try {
+      while (!reply.includes('codex_pong')) {
+        const result = await reader.read();
+        if (result.done) break;
+        if (result.value) reply += decoder.decode(result.value, { stream: true });
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      reader.releaseLock();
+    }
+
+    return reply.trim();
+  }
+
+  async function connectUsb() {
+    if (!usbState.supported) {
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Browser unsupported',
+        detail: 'Use Chrome or Edge with Web Serial, or run the Python USB notifier.'
+      }));
+      return;
+    }
+
+    try {
+      const port = await navigator.serial.requestPort();
+      await port.open({ baudRate: 115200 });
+      serialPortRef.current = port;
+
+      await delay(900);
+      await writeUsbLine('codex_ping');
+      const reply = await readUsbReply();
+      const connected = reply.includes('codex_pong');
+
+      setUsbState({
+        connected,
+        supported: true,
+        label: connected ? 'Connected' : 'Opened, no MCU reply',
+        detail: connected ? reply.replace(/\s+/g, ' ') : 'Port opened, but no codex_pong was received.'
+      });
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Connection failed',
+        detail: error.message
+      }));
+    }
+  }
+
+  async function sendUsbDone() {
+    try {
+      await writeUsbLine(`notify_done ${config.hapticEffect}`);
+      setUsbState((current) => ({
+        ...current,
+        label: 'Sent',
+        detail: `notify_done ${config.hapticEffect}`
+      }));
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Send failed',
+        detail: error.message
+      }));
+    }
   }
 
   return (
@@ -200,21 +303,39 @@ export default function App() {
           <Panel title="Notify">
             <div className="grid gap-3">
               <div className="rounded-md border border-stone-300 bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <div className="text-sm font-semibold">USB</div>
-                    <code className="mt-2 block break-all rounded bg-stone-100 px-2 py-1 text-xs text-stone-700">
-                      python scripts\notify_mcu.py --mode usb
-                    </code>
+                    <div className="flex items-center gap-2">
+                      <span className={`h-2.5 w-2.5 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
+                      <div className="text-sm font-semibold">USB {usbState.label}</div>
+                    </div>
+                    <div className="mt-2 break-all text-xs text-stone-500">{usbState.detail}</div>
                   </div>
-                  <span className="rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white">
-                    Auto detect
-                  </span>
+                  <div className="grid grid-cols-2 gap-2 sm:w-[210px]">
+                    <button type="button" onClick={connectUsb} className="h-10 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
+                      Connect
+                    </button>
+                    <button
+                      type="button"
+                      onClick={sendUsbDone}
+                      disabled={!usbState.connected}
+                      className={`h-10 rounded-md px-3 text-sm font-semibold ${
+                        usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'
+                      }`}
+                    >
+                      Send
+                    </button>
+                  </div>
                 </div>
               </div>
 
               <div className="rounded-md border border-stone-300 bg-white p-4">
-                <FieldLabel>Website command</FieldLabel>
+                <div className="flex items-center justify-between gap-3">
+                  <FieldLabel>Website command</FieldLabel>
+                  <span className={`text-xs font-semibold ${config.command === 'none' ? 'text-stone-400' : 'text-amber-700'}`}>
+                    {config.command === 'none' ? 'Idle' : 'Queued for sync'}
+                  </span>
+                </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {commandOptions.map(([value, label]) => (
                     <button
@@ -230,10 +351,6 @@ export default function App() {
                       {label}
                     </button>
                   ))}
-                </div>
-                <div className="mt-3 flex items-center justify-between text-sm">
-                  <span className="text-stone-500">Command ID</span>
-                  <span className="font-mono font-semibold">{config.commandId}</span>
                 </div>
               </div>
             </div>
