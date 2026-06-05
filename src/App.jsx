@@ -19,7 +19,6 @@ const commandOptions = [
   ['none', '無命令'],
   ['test_led', '測試 LED'],
   ['test_haptic', '測試震動'],
-  ['start_alarm', '開始鬧鐘'],
   ['stop_alarm', '停止鬧鐘'],
   ['snooze', '稍後提醒']
 ];

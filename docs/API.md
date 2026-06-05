@@ -50,7 +50,6 @@ Supported command values:
 none
 test_led
 test_haptic
-start_alarm
 stop_alarm
 snooze
 ```

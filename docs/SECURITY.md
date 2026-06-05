@@ -28,3 +28,5 @@ Use a long random secret. Keep the same value in:
 
 - your local shell environment when running `npm run sign:config`
 - `esp32c3_alarm_external_api_complete/arduino_secrets.h`
+
+If you package the signer as an EXE, do not compile your real secret into the program. The EXE should ask the user to type the secret or read it from that user's environment variable.

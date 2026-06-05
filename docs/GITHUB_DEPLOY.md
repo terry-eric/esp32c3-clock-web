@@ -24,3 +24,20 @@ git add public/devices/alarm_c3_001.json
 git commit -m "Update signed alarm config"
 git push origin main
 ```
+
+## Build Signer EXE
+
+For Windows:
+
+```powershell
+py -m pip install pyinstaller
+py -m PyInstaller --onefile --name esp32c3-config-signer scripts\sign_config.py
+```
+
+Run:
+
+```powershell
+.\dist\esp32c3-config-signer.exe --input public\devices\alarm_c3_001.json
+```
+
+Give the EXE to someone only if they are allowed to sign configs. Do not hard-code your real secret into the EXE.

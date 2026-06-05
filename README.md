@@ -70,6 +70,29 @@ npm run sign:config
 
 Then push to GitHub. Cloudflare Pages will redeploy the static JSON. The MCU will fetch it on its next sync interval.
 
+## Windows EXE Signer
+
+You can package the Python signer as a Windows EXE:
+
+```powershell
+py -m pip install pyinstaller
+py -m PyInstaller --onefile --name esp32c3-config-signer scripts\sign_config.py
+```
+
+The EXE will be created at:
+
+```text
+dist\esp32c3-config-signer.exe
+```
+
+Usage:
+
+```powershell
+.\dist\esp32c3-config-signer.exe --input public\devices\alarm_c3_001.json
+```
+
+It will ask for the signing secret. The secret is not saved into the EXE or JSON.
+
 ## Cloudflare Pages
 
 ```text

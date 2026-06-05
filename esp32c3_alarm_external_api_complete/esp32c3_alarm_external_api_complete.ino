@@ -68,7 +68,6 @@
     "none"
     "test_led"
     "test_haptic"
-    "start_alarm"
     "stop_alarm"
     "snooze"
 
@@ -989,12 +988,6 @@ void snoozeAlarm() {
   playHaptic(27);
 }
 
-void forceStartAlarm() {
-  lastAction = "MANUAL_START";
-  enterState(STATE_RINGING);
-  playHaptic(alarmConfig.hapticEffect);
-}
-
 void executeCommand(int commandId, String command, int effectFromCommand) {
   command.trim();
 
@@ -1013,8 +1006,6 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
     lastAction = "TEST_HAPTIC";
     int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
     playHaptic((uint8_t)effect);
-  } else if (command == "start_alarm") {
-    forceStartAlarm();
   } else if (command == "stop_alarm") {
     stopAlarm();
   } else if (command == "snooze") {
@@ -1345,7 +1336,6 @@ const char LOCAL_WEB_PAGE[] PROGMEM = R"rawliteral(
     <div class="cmds">
       <button onclick="sendCommand('test_led')">測試 LED</button>
       <button onclick="sendCommand('test_haptic')">測試震動</button>
-      <button onclick="sendCommand('start_alarm')">啟動鬧鐘</button>
       <button onclick="sendCommand('stop_alarm')">停止鬧鐘</button>
       <button onclick="sendCommand('snooze')">貪睡</button>
     </div>
@@ -1467,7 +1457,6 @@ bool isAllowedLocalCommand(const String& command) {
   return command == "none" ||
          command == "test_led" ||
          command == "test_haptic" ||
-         command == "start_alarm" ||
          command == "stop_alarm" ||
          command == "snooze";
 }
@@ -1717,7 +1706,8 @@ void handleButtonEventLong() {
   if (stateNow == STATE_RINGING || stateNow == STATE_PREALARM || stateNow == STATE_SNOOZE) {
     stopAlarm();
   } else {
-    forceStartAlarm();
+    Serial.println("[BTN] Long press ignored outside alarm states");
+    playHaptic(1);
   }
 }
 
