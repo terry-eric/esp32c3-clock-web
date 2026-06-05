@@ -123,6 +123,8 @@ flashLedBrightness
 
 `ledPairBrightness` controls LED A and LED B together. `flashLedBrightness` controls the separate flashing LED. Both use PWM on the ESP32-C3 LEDC peripheral.
 
+When signed website JSON or the local MCU API changes alarm/output settings, the MCU saves the new config to ESP32 NVS (`Preferences`) so it survives reboot and power loss. Unchanged cloud sync payloads skip the NVS write to reduce flash wear. Command acknowledgements still persist `lastCommandId` after a command runs, preventing repeated execution after restart.
+
 If the device still sometimes cannot connect:
 
 - Increase `ALARM_BOOT_STABILIZE_MS` to `2000UL` if USB/battery power or a phone hotspot needs more time immediately after boot.

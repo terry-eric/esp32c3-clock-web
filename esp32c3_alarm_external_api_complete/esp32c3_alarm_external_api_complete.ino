@@ -1137,6 +1137,18 @@ bool applyConfigFromJson(JsonVariantConst doc) {
     return false;
   }
 
+  bool previousEnabled = alarmConfig.enabled;
+  int previousHour = alarmConfig.hour;
+  int previousMinute = alarmConfig.minute;
+  uint8_t previousRepeatMask = alarmConfig.repeatMask;
+  int previousPrealertSec = alarmConfig.prealertSec;
+  int previousSnoozeMin = alarmConfig.snoozeMin;
+  int previousMaxRingSec = alarmConfig.maxRingSec;
+  int previousHapticEffect = alarmConfig.hapticEffect;
+  int previousLedPairBrightness = alarmConfig.ledPairBrightness;
+  int previousFlashLedBrightness = alarmConfig.flashLedBrightness;
+  int previousVersion = alarmConfig.version;
+
   alarmConfig.enabled = doc["enabled"] | alarmConfig.enabled;
   alarmConfig.hour = doc["hour"] | alarmConfig.hour;
   alarmConfig.minute = doc["minute"] | alarmConfig.minute;
@@ -1159,7 +1171,25 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   alarmConfig.ledPairBrightness = constrain(alarmConfig.ledPairBrightness, 0, 10);
   alarmConfig.flashLedBrightness = constrain(alarmConfig.flashLedBrightness, 0, 10);
 
-  saveConfigToNVS();
+  bool configChanged =
+    previousEnabled != alarmConfig.enabled ||
+    previousHour != alarmConfig.hour ||
+    previousMinute != alarmConfig.minute ||
+    previousRepeatMask != alarmConfig.repeatMask ||
+    previousPrealertSec != alarmConfig.prealertSec ||
+    previousSnoozeMin != alarmConfig.snoozeMin ||
+    previousMaxRingSec != alarmConfig.maxRingSec ||
+    previousHapticEffect != alarmConfig.hapticEffect ||
+    previousLedPairBrightness != alarmConfig.ledPairBrightness ||
+    previousFlashLedBrightness != alarmConfig.flashLedBrightness ||
+    previousVersion != alarmConfig.version;
+
+  if (configChanged) {
+    saveConfigToNVS();
+    Serial.println("[NVS] Config changed, saved");
+  } else {
+    Serial.println("[NVS] Config unchanged, skipped save");
+  }
 
   Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d\n",
                 alarmConfig.enabled,
