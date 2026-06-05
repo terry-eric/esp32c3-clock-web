@@ -29,6 +29,10 @@ Use a long random secret. Keep the same value in:
 - your local shell environment when running `npm run sign:config`
 - `esp32c3_alarm_external_api_complete/arduino_secrets.h`
 
+The repository includes `demo-only-change-me` only so the public example
+`arduino_secrets.example.h` matches the checked-in sample JSON signature. Treat
+that demo value as public and insecure. Change it before using a real device.
+
 If you package the signer as an EXE, do not compile your real secret into the program. The EXE should ask the user to type the secret or read it from that user's environment variable.
 
 `scripts/notify_mcu.py` uses the MCU local API and optional `ALARM_LOCAL_API_TOKEN`. Do not publish your local token in docs, GitHub, or screenshots.

@@ -17,9 +17,9 @@
 #define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"
 #define ALARM_ENABLE_CLOUD_SYNC true
 
-// Keep the real signing secret in arduino_secrets.h only.
-// The same secret is used by scripts/sign-config.mjs on your own computer.
-#define ALARM_CONFIG_HMAC_SECRET "replace-with-private-signing-secret"
+// Demo-only signing secret. This public example matches the checked-in JSON,
+// so the sample can run after you copy this file. Change it for real use.
+#define ALARM_CONFIG_HMAC_SECRET "demo-only-change-me"
 #define ALARM_REQUIRE_CONFIG_SIGNATURE true
 
 // Legacy/private API placeholders. Not used by the signed static JSON flow.

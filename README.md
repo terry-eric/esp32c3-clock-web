@@ -47,11 +47,18 @@ Edit only `arduino_secrets.h`:
 #define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
 #define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"
 #define ALARM_ENABLE_CLOUD_SYNC true
-#define ALARM_CONFIG_HMAC_SECRET "your-private-signing-secret"
+#define ALARM_CONFIG_HMAC_SECRET "demo-only-change-me"
 #define ALARM_REQUIRE_CONFIG_SIGNATURE true
 ```
 
 Do not commit `arduino_secrets.h`.
+
+The checked-in example uses the public demo secret `demo-only-change-me`, and
+`public/devices/alarm_c3_001.json` is signed with that same value so a fresh copy
+can boot and verify the sample JSON. This is only for first-run testing. For a
+real device, replace `ALARM_CONFIG_HMAC_SECRET` with your own private random
+secret, set the same value in your shell when signing JSON, then run
+`npm run sign:config` or `npm run sign:config:py`.
 
 ## Sign Config
 

@@ -1,5 +1,14 @@
 # Examples
 
+The checked-in starter example uses this public demo signing secret:
+
+```text
+demo-only-change-me
+```
+
+It is intentionally not private. Use it only to confirm the firmware and sample
+JSON can verify each other, then replace it and sign the JSON again.
+
 ## Signed JSON
 
 ```json
