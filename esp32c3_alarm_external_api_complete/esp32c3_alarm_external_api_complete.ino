@@ -84,6 +84,7 @@
 #include <Wire.h>
 #include <Adafruit_DRV2605.h>
 #include <Preferences.h>
+#include <sys/time.h>
 #include <time.h>
 #include "mbedtls/md.h"
 
@@ -235,10 +236,6 @@ const char* LOCAL_API_TOKEN = ALARM_LOCAL_API_TOKEN;
 #endif
 
 const bool HTTPS_INSECURE = ALARM_HTTPS_INSECURE;
-
-// Taiwan timezone: UTC+8
-const long GMT_OFFSET_SEC = 8 * 3600;
-const int DAYLIGHT_OFFSET_SEC = 0;
 
 // ============================================================
 // Pin settings
@@ -775,39 +772,39 @@ void setupWiFi() {
   waitWiFiConnected(WIFI_CONNECT_TIMEOUT_MS);
 }
 
-void setupTimeNTP() {
-  if (WiFi.status() != WL_CONNECTED) {
-    timeOK = false;
-    return;
+void setupLocalTimezone() {
+  setenv("TZ", "CST-8", 1);
+  tzset();
+}
+
+bool setTimeFromEpoch(time_t epochSeconds) {
+  if (epochSeconds < 1704067200) {
+    return false;
   }
 
-  Serial.println("[NTP] Config time...");
-  configTime(GMT_OFFSET_SEC, DAYLIGHT_OFFSET_SEC,
-             "pool.ntp.org",
-             "time.nist.gov",
-             "time.google.com");
+  timeval now;
+  now.tv_sec = epochSeconds;
+  now.tv_usec = 0;
 
-  Serial.print("[NTP] Syncing");
+  if (settimeofday(&now, nullptr) != 0) {
+    return false;
+  }
+
+  setupLocalTimezone();
+  timeOK = true;
+
+  if (stateNow == STATE_TIME_INVALID || stateNow == STATE_BOOT) {
+    enterState(drvOK ? STATE_IDLE : STATE_DRV_FAIL);
+  }
 
   struct tm t;
-  unsigned long startMs = millis();
-
-  while (!getLocalTimeSafe(&t) && millis() - startMs < 10000) {
-    Serial.print(".");
-    delay(300);
-  }
-
-  Serial.println();
-
-  timeOK = getLocalTimeSafe(&t);
-
-  if (timeOK) {
-    Serial.printf("[NTP] Time OK: %04d-%02d-%02d %02d:%02d:%02d\n",
+  if (getLocalTimeSafe(&t)) {
+    Serial.printf("[USB] Time set: %04d-%02d-%02d %02d:%02d:%02d\n",
                   t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                   t.tm_hour, t.tm_min, t.tm_sec);
-  } else {
-    Serial.println("[NTP] Time invalid");
   }
+
+  return true;
 }
 
 // ============================================================
@@ -1270,6 +1267,19 @@ void handleUsbCommandLine(String line) {
     Serial.print(DEVICE_ID);
     Serial.print(" ");
     Serial.println(DEVICE_NAME);
+    return;
+  }
+
+  if (command == "set_time") {
+    String epochText = separatorIndex > 0 ? line.substring(separatorIndex + 1) : "";
+    epochText.trim();
+    time_t epochSeconds = (time_t)epochText.toInt();
+
+    if (setTimeFromEpoch(epochSeconds)) {
+      Serial.println("usb_time_ok");
+    } else {
+      Serial.println("usb_time_rejected");
+    }
     return;
   }
 
@@ -2116,6 +2126,7 @@ void setup() {
   Serial.println(DEVICE_NAME);
   Serial.println("======================================================");
 
+  setupLocalTimezone();
   WiFi.onEvent(onWiFiEvent);
 
   pinMode(PIN_LED_A, OUTPUT);
@@ -2139,7 +2150,6 @@ void setup() {
 
   if (WiFi.status() == WL_CONNECTED) {
     setupLocalApiServer();
-    setupTimeNTP();
     if (CLOUD_SYNC_ENABLED) {
       syncConfigFromServer();
     }
@@ -2163,12 +2173,6 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED) {
     setupLocalApiServer();
-  }
-
-  // 如果 Wi-Fi 原本斷線後又連上，補做 NTP
-  if (WiFi.status() == WL_CONNECTED && !timeOK) {
-    setupLocalApiServer();
-    setupTimeNTP();
   }
 
   updateButton();

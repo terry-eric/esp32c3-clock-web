@@ -165,6 +165,10 @@ export default function App() {
         label: connected ? 'Connected' : 'Opened, no MCU reply',
         detail: connected ? reply.replace(/\s+/g, ' ') : 'Port opened, but no codex_pong was received.'
       });
+
+      if (connected) {
+        await syncUsbTime();
+      }
     } catch (error) {
       setUsbState((current) => ({
         ...current,
@@ -206,6 +210,26 @@ export default function App() {
         ...current,
         connected: false,
         label: 'Send failed',
+        detail: error.message
+      }));
+    }
+  }
+
+  async function syncUsbTime() {
+    try {
+      const epochSeconds = Math.floor(Date.now() / 1000);
+      await writeUsbLine(`set_time ${epochSeconds}`);
+      const reply = await readUsbReply('usb_time_', 1800);
+      setUsbState((current) => ({
+        ...current,
+        label: reply.includes('usb_time_ok') ? 'Time synced' : 'Time sent',
+        detail: reply || `set_time ${epochSeconds}`
+      }));
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Time sync failed',
         detail: error.message
       }));
     }
@@ -341,9 +365,12 @@ export default function App() {
                     </div>
                     <div className="mt-2 break-all text-xs text-stone-500">{usbState.detail}</div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 sm:w-[210px]">
+                  <div className="grid grid-cols-3 gap-2 sm:w-[315px]">
                     <button type="button" onClick={connectUsb} className="h-10 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       Connect
+                    </button>
+                    <button type="button" onClick={syncUsbTime} disabled={!usbState.connected} className={`h-10 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
+                      Time
                     </button>
                     <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
                       Apply

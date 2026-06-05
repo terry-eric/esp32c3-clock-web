@@ -37,6 +37,7 @@ Edit only `arduino_secrets.h`:
 
 Open the web console in Chrome or Edge, press `Connect`, choose the ESP32-C3 serial port, then use:
 
+- `Time` to sync the MCU clock from the computer over USB
 - `Apply` to save alarm/output settings to MCU NVS
 - `Done alert` to flash/vibrate immediately
 - `Test LEDs` and `Test haptic` for hardware checks
@@ -45,6 +46,7 @@ The MCU accepts these USB serial commands at `115200` baud:
 
 ```text
 codex_ping
+set_time 1780000000
 notify_done 10
 test_led
 test_haptic 10
@@ -54,6 +56,7 @@ set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightne
 ```
 
 `set_config` writes changed settings to ESP32 NVS so they survive reboot and power loss.
+`set_time` uses Unix epoch seconds from the computer/browser. It replaces NTP for normal use.
 
 ## Codex Done Notification
 

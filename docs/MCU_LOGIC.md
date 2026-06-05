@@ -5,7 +5,8 @@ The starter firmware is USB-first:
 - Load alarm/output config from ESP32 NVS.
 - Run the alarm state machine and hardware outputs.
 - Accept config and commands over USB serial.
-- Optionally maintain Wi-Fi for NTP/local API if credentials are configured.
+- Accept time updates over USB serial.
+- Optionally maintain Wi-Fi for the legacy local API if credentials are configured.
 - Keep legacy signed JSON cloud sync available, but disabled by default.
 
 ## Startup Flow
@@ -18,8 +19,7 @@ flowchart TD
   D --> E["Start Wi-Fi connection window"]
   E --> F{"Wi-Fi connected?"}
   F -- "Yes" --> G["Start local MCU Web/API"]
-  G --> H["Sync NTP time"]
-  H --> I["Continue USB-controlled operation"]
+  G --> I["Continue USB-controlled operation"]
   F -- "No" --> J["Continue local alarm logic"]
   I --> K{"Time OK and driver OK?"}
   J --> K
@@ -47,6 +47,7 @@ flowchart TD
 
 ```text
 codex_ping
+set_time 1780000000
 notify_done 10
 test_led
 test_haptic 10
@@ -56,6 +57,7 @@ set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightne
 ```
 
 `set_config` applies the provided alarm/output fields, clamps safe ranges, and writes changed settings to NVS.
+`set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. This replaces NTP for normal use.
 
 ## Persisted Settings
 
@@ -82,7 +84,7 @@ lastCommandId
 
 ## Wi-Fi Notes
 
-Wi-Fi is no longer required for control. It can still be useful for NTP time sync or the optional local HTTP API. Starter config disables cloud sync:
+Wi-Fi is no longer required for control or time sync. Time is set over USB. Wi-Fi can still be useful for the optional local HTTP API. Starter config disables cloud sync:
 
 ```cpp
 #define ALARM_ENABLE_CLOUD_SYNC false
