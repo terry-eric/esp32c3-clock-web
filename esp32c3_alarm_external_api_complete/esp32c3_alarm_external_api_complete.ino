@@ -353,6 +353,7 @@ int lastAlarmYday = -1;
 time_t snoozeUntil = 0;
 
 int lastCommandId = 0;
+int lastCloudCommandId = 0;
 String lastAction = "BOOT";
 
 bool isAllowedLocalCommand(const String& command);
@@ -495,6 +496,7 @@ void saveConfigToNVS() {
   prefs.putInt("ledFlash", alarmConfig.flashLedBrightness);
   prefs.putInt("version", alarmConfig.version);
   prefs.putInt("lastCmd", lastCommandId);
+  prefs.putInt("lastCloudCmd", lastCloudCommandId);
   prefs.end();
 }
 
@@ -512,10 +514,11 @@ void loadConfigFromNVS() {
   alarmConfig.flashLedBrightness = prefs.getInt("ledFlash", 10);
   alarmConfig.version = prefs.getInt("version", 0);
   lastCommandId = prefs.getInt("lastCmd", 0);
+  lastCloudCommandId = prefs.getInt("lastCloudCmd", 0);
   prefs.end();
 
   Serial.println("[NVS] Alarm config loaded");
-  Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d lastCmd=%d\n",
+  Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d lastCmd=%d lastCloudCmd=%d\n",
                 alarmConfig.enabled,
                 alarmConfig.hour,
                 alarmConfig.minute,
@@ -527,7 +530,8 @@ void loadConfigFromNVS() {
                 alarmConfig.ledPairBrightness,
                 alarmConfig.flashLedBrightness,
                 alarmConfig.version,
-                lastCommandId);
+                lastCommandId,
+                lastCloudCommandId);
 }
 
 // ============================================================
@@ -1119,6 +1123,35 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
   }
 }
 
+void executeCloudCommand(int commandId, String command, int effectFromCommand) {
+  command.trim();
+
+  if (commandId <= 0) return;
+  if (commandId <= lastCloudCommandId) return;
+  if (command == "" || command == "none") return;
+
+  Serial.printf("[CMD] New cloud command id=%d command=%s\n", commandId, command.c_str());
+
+  lastCloudCommandId = commandId;
+  saveConfigToNVS();
+
+  if (command == "test_led") {
+    runLedTest();
+  } else if (command == "test_haptic") {
+    lastAction = "TEST_HAPTIC";
+    int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
+    playHaptic((uint8_t)effect);
+  } else if (command == "notify_done") {
+    runDoneNotification(effectFromCommand);
+  } else if (command == "stop_alarm") {
+    stopAlarm();
+  } else if (command == "snooze") {
+    snoozeAlarm();
+  } else {
+    Serial.println("[CMD] Unknown cloud command");
+  }
+}
+
 // ============================================================
 // Config sync from website
 // ============================================================
@@ -1204,10 +1237,10 @@ bool applyConfigFromJson(JsonVariantConst doc) {
                 alarmConfig.flashLedBrightness,
                 alarmConfig.version);
 
-  int incomingCommandId = doc["commandId"] | lastCommandId;
+  int incomingCommandId = doc["commandId"] | lastCloudCommandId;
   String incomingCommand = String(doc["command"] | "none");
   int incomingEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
-  executeCommand(incomingCommandId, incomingCommand, incomingEffect);
+  executeCloudCommand(incomingCommandId, incomingCommand, incomingEffect);
 
   return true;
 }

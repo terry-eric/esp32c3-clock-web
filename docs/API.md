@@ -48,6 +48,11 @@ alarm_c3_001|1|7|30|62|10|5|10|10|4|10|1|0|none
 
 Signed static JSON is not real time. If `commandId` increases and `command` is not `none`, the MCU runs that signed command on its next cloud sync.
 
+Cloud commands use a separate persisted command cursor from USB/local commands.
+This prevents repeated USB tests from making a later website command look stale.
+The web console loads the currently published JSON first, then increments
+`commandId` from that value when you queue a website command.
+
 ## Local Vibe Notification
 
 The MCU exposes immediate local commands by HTTP when its IP is known:

@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 const defaultConfig = {
   deviceId: 'alarm_c3_001',
@@ -99,6 +99,32 @@ export default function App() {
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
   const syncUrl = `https://esp32c3-clock-web.pages.dev${publicPath}`;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPublishedConfig() {
+      try {
+        const response = await fetch(`/devices/${defaultConfig.deviceId}.json`, { cache: 'no-store' });
+        if (!response.ok) return;
+        const published = await response.json();
+        if (cancelled) return;
+
+        setConfig((current) => ({
+          ...current,
+          ...published,
+          deviceName: current.deviceName
+        }));
+      } catch {
+        // Keep local defaults when the static JSON is unavailable in dev.
+      }
+    }
+
+    loadPublishedConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function update(patch) {
     setConfig((current) => ({ ...current, ...patch }));
