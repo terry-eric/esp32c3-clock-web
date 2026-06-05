@@ -173,38 +173,19 @@ export default function App() {
     }
   }
 
-  async function sendUsbDone() {
-    try {
-      await writeUsbLine(`notify_done ${config.hapticEffect}`);
-      setUsbState((current) => ({
-        ...current,
-        label: 'Sent',
-        detail: `notify_done ${config.hapticEffect}`
-      }));
-    } catch (error) {
-      setUsbState((current) => ({
-        ...current,
-        connected: false,
-        label: 'Send failed',
-        detail: error.message
-      }));
-    }
-  }
-
   async function sendUsbCommand(command) {
     try {
+      await applyUsbConfig({ quiet: true });
       await writeUsbLine(`${command} ${config.hapticEffect}`);
       setUsbState((current) => ({
         ...current,
-        label: 'Sent',
-        detail: command
+        label: 'Sent'
       }));
     } catch (error) {
       setUsbState((current) => ({
         ...current,
         connected: false,
-        label: 'Send failed',
-        detail: error.message
+        label: 'Send failed'
       }));
     }
   }
@@ -229,7 +210,7 @@ export default function App() {
     }
   }
 
-  async function applyUsbConfig() {
+  async function applyUsbConfig(options = {}) {
     try {
       const body = {
         enabled: config.enabled,
@@ -245,11 +226,13 @@ export default function App() {
       };
       await writeUsbLine(`set_config ${JSON.stringify(body)}`);
       const reply = await readUsbReply('usb_config_', 1800);
-      setUsbState((current) => ({
-        ...current,
-        label: reply.includes('usb_config_ok') ? 'Settings saved' : 'Settings sent',
-        detail: reply || 'set_config sent'
-      }));
+      if (!options.quiet) {
+        setUsbState((current) => ({
+          ...current,
+          label: reply.includes('usb_config_ok') ? 'Settings saved' : 'Settings sent',
+          detail: reply || 'set_config sent'
+        }));
+      }
     } catch (error) {
       setUsbState((current) => ({
         ...current,
@@ -257,6 +240,7 @@ export default function App() {
         label: 'Apply failed',
         detail: error.message
       }));
+      throw error;
     }
   }
 
@@ -346,7 +330,6 @@ export default function App() {
                       <span className={`h-2.5 w-2.5 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
                       <div className="text-sm font-semibold">USB {usbState.label}</div>
                     </div>
-                    <div className="mt-2 break-all text-xs text-stone-500">{usbState.detail}</div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 sm:w-[315px]">
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
