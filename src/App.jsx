@@ -10,6 +10,8 @@ const defaultConfig = {
   snoozeMin: 5,
   maxRingSec: 10,
   hapticEffect: 10,
+  ledPairBrightness: 10,
+  flashLedBrightness: 10,
   version: 1
 };
 
@@ -39,6 +41,8 @@ function signedPayload(config) {
     config.snoozeMin,
     config.maxRingSec,
     config.hapticEffect,
+    config.ledPairBrightness,
+    config.flashLedBrightness,
     config.version
   ].join('|');
 }
@@ -97,6 +101,8 @@ export default function App() {
                 />
               </label>
               <NumberField label="震動效果" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: clampZeroToTen(value) })} />
+              <NumberField label="紅綠 LED 亮度" value={config.ledPairBrightness} onChange={(value) => bumpVersion({ ledPairBrightness: clampZeroToTen(value) })} />
+              <NumberField label="閃燈 LED 亮度" value={config.flashLedBrightness} onChange={(value) => bumpVersion({ flashLedBrightness: clampZeroToTen(value) })} />
               <NumberField label="預提醒秒數" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: clampZeroToTen(value) })} />
               <NumberField label="貪睡分鐘" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: clampZeroToTen(value) })} />
               <NumberField label="最長響鈴秒數" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: clampZeroToTen(value) })} />

@@ -116,7 +116,11 @@ prealertSec
 snoozeMin
 maxRingSec
 hapticEffect
+ledPairBrightness
+flashLedBrightness
 ```
+
+`ledPairBrightness` controls LED A and LED B together. `flashLedBrightness` controls the separate flashing LED. Both use PWM on the ESP32-C3 LEDC peripheral.
 
 If the device still sometimes cannot connect:
 

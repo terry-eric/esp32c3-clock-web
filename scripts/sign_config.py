@@ -17,6 +17,8 @@ SIGNED_FIELDS = [
     "snoozeMin",
     "maxRingSec",
     "hapticEffect",
+    "ledPairBrightness",
+    "flashLedBrightness",
     "version",
 ]
 
@@ -53,6 +55,8 @@ def build_payload(config):
             require_zero_to_ten(config, "snoozeMin"),
             require_zero_to_ten(config, "maxRingSec"),
             require_zero_to_ten(config, "hapticEffect"),
+            require_zero_to_ten(config, "ledPairBrightness"),
+            require_zero_to_ten(config, "flashLedBrightness"),
             require_zero_to_ten(config, "version"),
         ]
     )

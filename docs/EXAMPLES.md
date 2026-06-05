@@ -13,6 +13,8 @@
   "snoozeMin": 5,
   "maxRingSec": 10,
   "hapticEffect": 10,
+  "ledPairBrightness": 10,
+  "flashLedBrightness": 10,
   "version": 1,
   "signature": "..."
 }

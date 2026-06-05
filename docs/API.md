@@ -19,6 +19,8 @@ Example:
   "snoozeMin": 5,
   "maxRingSec": 10,
   "hapticEffect": 10,
+  "ledPairBrightness": 10,
+  "flashLedBrightness": 10,
   "version": 1,
   "signature": "..."
 }
@@ -29,7 +31,7 @@ Example:
 The signature is HMAC-SHA256 over this exact payload:
 
 ```text
-deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version
+deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|ledPairBrightness|flashLedBrightness|version
 ```
 
 `enabled` is encoded as `1` or `0`.
@@ -37,7 +39,7 @@ deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticE
 For the example above:
 
 ```text
-alarm_c3_001|1|7|30|62|10|5|10|10|1
+alarm_c3_001|1|7|30|62|10|5|10|10|10|10|1
 ```
 
 ## Commands

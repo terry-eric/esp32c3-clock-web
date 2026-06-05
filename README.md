@@ -72,6 +72,15 @@ Then push to GitHub. Cloudflare Pages will redeploy the static JSON. The MCU wil
 
 Signed static JSON is not immediate, so one-time remote commands were removed. Use it for the next alarm config only.
 
+LED brightness is part of the signed config:
+
+```text
+ledPairBrightness: 0-10, controls LED A and LED B together
+flashLedBrightness: 0-10, controls the separate flashing LED
+```
+
+The MCU applies brightness with PWM, so all LED patterns keep their timing but change intensity.
+
 ## Windows EXE Signer
 
 You can package the Python signer as a Windows EXE:

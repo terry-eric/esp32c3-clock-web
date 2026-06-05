@@ -12,6 +12,8 @@ const SIGNED_FIELDS = [
   'snoozeMin',
   'maxRingSec',
   'hapticEffect',
+  'ledPairBrightness',
+  'flashLedBrightness',
   'version'
 ];
 
@@ -71,6 +73,8 @@ function buildPayload(config) {
     requiredZeroToTen(config, 'snoozeMin'),
     requiredZeroToTen(config, 'maxRingSec'),
     requiredZeroToTen(config, 'hapticEffect'),
+    requiredZeroToTen(config, 'ledPairBrightness'),
+    requiredZeroToTen(config, 'flashLedBrightness'),
     requiredZeroToTen(config, 'version')
   ].join('|');
 }

@@ -44,6 +44,8 @@
       "snoozeMin": 5,
       "maxRingSec": 10,
       "hapticEffect": 10,
+      "ledPairBrightness": 10,
+      "flashLedBrightness": 10,
       "version": 12,
       "signature": "..."
     }
@@ -63,7 +65,7 @@
 
   Signature payload:
 
-    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version
+    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|ledPairBrightness|flashLedBrightness|version
 */
 
 #include <WiFi.h>
@@ -76,6 +78,10 @@
 #include <Preferences.h>
 #include <time.h>
 #include "mbedtls/md.h"
+
+#if __has_include("esp_arduino_version.h")
+#include "esp_arduino_version.h"
+#endif
 
 #if __has_include("arduino_secrets.h")
 #include "arduino_secrets.h"
@@ -229,6 +235,12 @@ const int DAYLIGHT_OFFSET_SEC = 0;
 #define PIN_LED_FLASH    7
 #define PIN_TOUCH        3
 
+#define LED_PWM_FREQ       5000
+#define LED_PWM_RES_BITS   8
+#define LED_A_PWM_CHANNEL  0
+#define LED_B_PWM_CHANNEL  1
+#define LED_F_PWM_CHANNEL  2
+
 // 觸控模組如果「觸碰時輸出 HIGH」，設 true。
 // 如果是一般按鈕「按下接 GND」，設 false。
 const bool TOUCH_ACTIVE_HIGH = false;
@@ -272,6 +284,8 @@ struct AlarmConfig {
   int snoozeMin = 5;
   int maxRingSec = 10;
   int hapticEffect = 10;
+  int ledPairBrightness = 10;
+  int flashLedBrightness = 10;
   int version = 0;
 };
 
@@ -377,10 +391,50 @@ void enterState(SystemState s) {
   Serial.println(stateToString(s));
 }
 
+uint8_t brightnessToDuty(int value) {
+  int clamped = constrain(value, 0, 10);
+  return (uint8_t)map(clamped, 0, 10, 0, 255);
+}
+
+void writePwmPin(uint8_t pin, uint8_t channel, uint8_t duty) {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcWrite(pin, duty);
+#else
+  ledcWrite(channel, duty);
+#endif
+}
+
+void setupLedPwm() {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcAttach(PIN_LED_A, LED_PWM_FREQ, LED_PWM_RES_BITS);
+  ledcAttach(PIN_LED_B, LED_PWM_FREQ, LED_PWM_RES_BITS);
+  ledcAttach(PIN_LED_FLASH, LED_PWM_FREQ, LED_PWM_RES_BITS);
+#else
+  ledcSetup(LED_A_PWM_CHANNEL, LED_PWM_FREQ, LED_PWM_RES_BITS);
+  ledcSetup(LED_B_PWM_CHANNEL, LED_PWM_FREQ, LED_PWM_RES_BITS);
+  ledcSetup(LED_F_PWM_CHANNEL, LED_PWM_FREQ, LED_PWM_RES_BITS);
+  ledcAttachPin(PIN_LED_A, LED_A_PWM_CHANNEL);
+  ledcAttachPin(PIN_LED_B, LED_B_PWM_CHANNEL);
+  ledcAttachPin(PIN_LED_FLASH, LED_F_PWM_CHANNEL);
+#endif
+}
+
+void writeLedA(bool on) {
+  writePwmPin(PIN_LED_A, LED_A_PWM_CHANNEL, on ? brightnessToDuty(alarmConfig.ledPairBrightness) : 0);
+}
+
+void writeLedB(bool on) {
+  writePwmPin(PIN_LED_B, LED_B_PWM_CHANNEL, on ? brightnessToDuty(alarmConfig.ledPairBrightness) : 0);
+}
+
+void writeLedFlash(bool on) {
+  writePwmPin(PIN_LED_FLASH, LED_F_PWM_CHANNEL, on ? brightnessToDuty(alarmConfig.flashLedBrightness) : 0);
+}
+
 void allLedOff() {
-  digitalWrite(PIN_LED_A, LOW);
-  digitalWrite(PIN_LED_B, LOW);
-  digitalWrite(PIN_LED_FLASH, LOW);
+  writeLedA(false);
+  writeLedB(false);
+  writeLedFlash(false);
 }
 
 void playHaptic(uint8_t effect) {
@@ -416,6 +470,8 @@ void saveConfigToNVS() {
   prefs.putInt("snoozeMin", alarmConfig.snoozeMin);
   prefs.putInt("maxRingSec", alarmConfig.maxRingSec);
   prefs.putInt("effect", alarmConfig.hapticEffect);
+  prefs.putInt("ledPair", alarmConfig.ledPairBrightness);
+  prefs.putInt("ledFlash", alarmConfig.flashLedBrightness);
   prefs.putInt("version", alarmConfig.version);
   prefs.putInt("lastCmd", lastCommandId);
   prefs.end();
@@ -431,12 +487,14 @@ void loadConfigFromNVS() {
   alarmConfig.snoozeMin = prefs.getInt("snoozeMin", 5);
   alarmConfig.maxRingSec = prefs.getInt("maxRingSec", 10);
   alarmConfig.hapticEffect = prefs.getInt("effect", 10);
+  alarmConfig.ledPairBrightness = prefs.getInt("ledPair", 10);
+  alarmConfig.flashLedBrightness = prefs.getInt("ledFlash", 10);
   alarmConfig.version = prefs.getInt("version", 0);
   lastCommandId = prefs.getInt("lastCmd", 0);
   prefs.end();
 
   Serial.println("[NVS] Alarm config loaded");
-  Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d version=%d lastCmd=%d\n",
+  Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d lastCmd=%d\n",
                 alarmConfig.enabled,
                 alarmConfig.hour,
                 alarmConfig.minute,
@@ -445,6 +503,8 @@ void loadConfigFromNVS() {
                 alarmConfig.snoozeMin,
                 alarmConfig.maxRingSec,
                 alarmConfig.hapticEffect,
+                alarmConfig.ledPairBrightness,
+                alarmConfig.flashLedBrightness,
                 alarmConfig.version,
                 lastCommandId);
 }
@@ -829,6 +889,8 @@ String signedConfigPayload(JsonVariantConst doc) {
       !doc["snoozeMin"].is<int>() ||
       !doc["maxRingSec"].is<int>() ||
       !doc["hapticEffect"].is<int>() ||
+      !doc["ledPairBrightness"].is<int>() ||
+      !doc["flashLedBrightness"].is<int>() ||
       !doc["version"].is<int>()) {
     return "";
   }
@@ -850,6 +912,10 @@ String signedConfigPayload(JsonVariantConst doc) {
   payload += String(doc["maxRingSec"].as<int>());
   payload += "|";
   payload += String(doc["hapticEffect"].as<int>());
+  payload += "|";
+  payload += String(doc["ledPairBrightness"].as<int>());
+  payload += "|";
+  payload += String(doc["flashLedBrightness"].as<int>());
   payload += "|";
   payload += String(doc["version"].as<int>());
   return payload;
@@ -931,14 +997,14 @@ void runLedTest() {
   lastAction = "TEST_LED";
 
   for (int i = 0; i < 3; i++) {
-    digitalWrite(PIN_LED_A, HIGH);
-    digitalWrite(PIN_LED_B, LOW);
-    digitalWrite(PIN_LED_FLASH, HIGH);
+    writeLedA(true);
+    writeLedB(false);
+    writeLedFlash(true);
     delay(150);
 
-    digitalWrite(PIN_LED_A, LOW);
-    digitalWrite(PIN_LED_B, HIGH);
-    digitalWrite(PIN_LED_FLASH, LOW);
+    writeLedA(false);
+    writeLedB(true);
+    writeLedFlash(false);
     delay(150);
   }
 
@@ -952,9 +1018,9 @@ void runDoneNotification(int effectFromCommand) {
   int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
 
   for (int i = 0; i < 3; i++) {
-    digitalWrite(PIN_LED_A, HIGH);
-    digitalWrite(PIN_LED_B, HIGH);
-    digitalWrite(PIN_LED_FLASH, HIGH);
+    writeLedA(true);
+    writeLedB(true);
+    writeLedFlash(true);
     playHaptic((uint8_t)effect);
     delay(180);
 
@@ -1042,6 +1108,8 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   alarmConfig.snoozeMin = doc["snoozeMin"] | alarmConfig.snoozeMin;
   alarmConfig.maxRingSec = doc["maxRingSec"] | alarmConfig.maxRingSec;
   alarmConfig.hapticEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
+  alarmConfig.ledPairBrightness = doc["ledPairBrightness"] | alarmConfig.ledPairBrightness;
+  alarmConfig.flashLedBrightness = doc["flashLedBrightness"] | alarmConfig.flashLedBrightness;
   alarmConfig.version = incomingVersion;
 
   alarmConfig.hour = constrain(alarmConfig.hour, 0, 23);
@@ -1051,10 +1119,12 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 0, 10);
   alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 0, 10);
   alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 0, 10);
+  alarmConfig.ledPairBrightness = constrain(alarmConfig.ledPairBrightness, 0, 10);
+  alarmConfig.flashLedBrightness = constrain(alarmConfig.flashLedBrightness, 0, 10);
 
   saveConfigToNVS();
 
-  Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d version=%d\n",
+  Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d\n",
                 alarmConfig.enabled,
                 alarmConfig.hour,
                 alarmConfig.minute,
@@ -1063,6 +1133,8 @@ bool applyConfigFromJson(JsonVariantConst doc) {
                 alarmConfig.snoozeMin,
                 alarmConfig.maxRingSec,
                 alarmConfig.hapticEffect,
+                alarmConfig.ledPairBrightness,
+                alarmConfig.flashLedBrightness,
                 alarmConfig.version);
 
   return true;
@@ -1131,6 +1203,8 @@ void fillConfigJsonObject(JsonObject doc) {
   doc["snoozeMin"] = alarmConfig.snoozeMin;
   doc["maxRingSec"] = alarmConfig.maxRingSec;
   doc["hapticEffect"] = alarmConfig.hapticEffect;
+  doc["ledPairBrightness"] = alarmConfig.ledPairBrightness;
+  doc["flashLedBrightness"] = alarmConfig.flashLedBrightness;
   doc["version"] = alarmConfig.version;
   doc["commandId"] = lastCommandId;
   doc["command"] = "none";
@@ -1161,6 +1235,8 @@ void fillStatusJsonObject(JsonObject doc) {
   doc["snoozeMin"] = alarmConfig.snoozeMin;
   doc["maxRingSec"] = alarmConfig.maxRingSec;
   doc["hapticEffect"] = alarmConfig.hapticEffect;
+  doc["ledPairBrightness"] = alarmConfig.ledPairBrightness;
+  doc["flashLedBrightness"] = alarmConfig.flashLedBrightness;
   doc["configVersion"] = alarmConfig.version;
 
   doc["lastAction"] = lastAction;
@@ -1320,6 +1396,8 @@ const char LOCAL_WEB_PAGE[] PROGMEM = R"rawliteral(
       <div><label>分鐘</label><input id="minute" type="number" min="0" max="59"></div>
       <div><label>震動效果</label><input id="effect" type="number" min="0" max="10"></div>
       <div><label>貪睡分鐘</label><input id="snooze" type="number" min="0" max="10"></div>
+      <div><label>紅綠亮度</label><input id="ledPair" type="number" min="0" max="10"></div>
+      <div><label>閃燈亮度</label><input id="ledFlash" type="number" min="0" max="10"></div>
     </div>
     <label>Repeat mask</label>
     <input id="repeat" type="number" min="0" max="127">
@@ -1369,6 +1447,8 @@ async function refresh(){
     $('minute').value = c.minute ?? 30;
     $('effect').value = c.hapticEffect ?? 10;
     $('snooze').value = c.snoozeMin ?? 5;
+    $('ledPair').value = c.ledPairBrightness ?? 10;
+    $('ledFlash').value = c.flashLedBrightness ?? 10;
     $('repeat').value = c.repeatMask ?? 62;
     $('enabled').checked = Boolean(c.enabled);
     log('狀態已更新', data);
@@ -1381,7 +1461,9 @@ async function saveConfig(){
     minute: Number($('minute').value),
     repeatMask: Number($('repeat').value),
     snoozeMin: Number($('snooze').value),
-    hapticEffect: Number($('effect').value)
+    hapticEffect: Number($('effect').value),
+    ledPairBrightness: Number($('ledPair').value),
+    flashLedBrightness: Number($('ledFlash').value)
   };
   try{
     const res = await fetch('/api/local/config', {method:'POST',headers:headers(),body:JSON.stringify(body)});
@@ -1738,49 +1820,49 @@ void updateLedPattern() {
 
   switch (stateNow) {
     case STATE_BOOT:
-      digitalWrite(PIN_LED_A, (nowMs / 200) % 2);
-      digitalWrite(PIN_LED_B, LOW);
-      digitalWrite(PIN_LED_FLASH, LOW);
+      writeLedA((nowMs / 200) % 2);
+      writeLedB(false);
+      writeLedFlash(false);
       break;
 
     case STATE_TIME_INVALID:
-      digitalWrite(PIN_LED_A, LOW);
-      digitalWrite(PIN_LED_B, (nowMs / 1000) % 2);
-      digitalWrite(PIN_LED_FLASH, LOW);
+      writeLedA(false);
+      writeLedB((nowMs / 1000) % 2);
+      writeLedFlash(false);
       break;
 
     case STATE_IDLE:
       // slow heartbeat
-      digitalWrite(PIN_LED_A, (nowMs % 10000) < 80);
-      digitalWrite(PIN_LED_B, LOW);
-      digitalWrite(PIN_LED_FLASH, LOW);
+      writeLedA((nowMs % 10000) < 80);
+      writeLedB(false);
+      writeLedFlash(false);
       break;
 
     case STATE_PREALARM:
-      digitalWrite(PIN_LED_A, (nowMs / 500) % 2);
-      digitalWrite(PIN_LED_B, LOW);
-      digitalWrite(PIN_LED_FLASH, (nowMs % 5000) < 120);
+      writeLedA((nowMs / 500) % 2);
+      writeLedB(false);
+      writeLedFlash((nowMs % 5000) < 120);
       break;
 
     case STATE_RINGING:
-      digitalWrite(PIN_LED_A, HIGH);
-      digitalWrite(PIN_LED_B, (nowMs / 250) % 2);
-      digitalWrite(PIN_LED_FLASH, (nowMs / 125) % 2);
+      writeLedA(true);
+      writeLedB((nowMs / 250) % 2);
+      writeLedFlash((nowMs / 125) % 2);
       break;
 
     case STATE_SNOOZE: {
       unsigned long p = nowMs % 10000;
       bool doubleBlink = (p < 100) || (p > 250 && p < 350);
-      digitalWrite(PIN_LED_A, doubleBlink);
-      digitalWrite(PIN_LED_B, LOW);
-      digitalWrite(PIN_LED_FLASH, LOW);
+      writeLedA(doubleBlink);
+      writeLedB(false);
+      writeLedFlash(false);
       break;
     }
 
     case STATE_STOPPED:
-      digitalWrite(PIN_LED_A, (nowMs - stateEnterMs) < 1000);
-      digitalWrite(PIN_LED_B, (nowMs - stateEnterMs) < 1000);
-      digitalWrite(PIN_LED_FLASH, LOW);
+      writeLedA((nowMs - stateEnterMs) < 1000);
+      writeLedB((nowMs - stateEnterMs) < 1000);
+      writeLedFlash(false);
 
       if (nowMs - stateEnterMs > 1200) {
         enterState(STATE_IDLE);
@@ -1788,9 +1870,9 @@ void updateLedPattern() {
       break;
 
     case STATE_DRV_FAIL:
-      digitalWrite(PIN_LED_A, LOW);
-      digitalWrite(PIN_LED_B, HIGH);
-      digitalWrite(PIN_LED_FLASH, (nowMs / 200) % 2);
+      writeLedA(false);
+      writeLedB(true);
+      writeLedFlash((nowMs / 200) % 2);
       break;
   }
 }
@@ -1851,6 +1933,7 @@ void setup() {
   pinMode(PIN_LED_A, OUTPUT);
   pinMode(PIN_LED_B, OUTPUT);
   pinMode(PIN_LED_FLASH, OUTPUT);
+  setupLedPwm();
 
   if (TOUCH_ACTIVE_HIGH) {
     pinMode(PIN_TOUCH, INPUT_PULLDOWN);
