@@ -7,8 +7,6 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "sign:config": "node scripts/sign-config.mjs --input public/devices/alarm_c3_001.json",
-    "sign:config:py": "python scripts/sign_config.py --input public/devices/alarm_c3_001.json",
     "notify:mcu": "python scripts/notify_mcu.py",
     "test": "npm run build"
   },

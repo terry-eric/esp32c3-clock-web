@@ -15,27 +15,27 @@ const defaultConfig = {
 };
 
 const days = [
-  ['Sun', 0],
-  ['Mon', 1],
-  ['Tue', 2],
-  ['Wed', 3],
-  ['Thu', 4],
-  ['Fri', 5],
-  ['Sat', 6]
+  [{ en: 'Sun', zh: '日' }, 0],
+  [{ en: 'Mon', zh: '一' }, 1],
+  [{ en: 'Tue', zh: '二' }, 2],
+  [{ en: 'Wed', zh: '三' }, 3],
+  [{ en: 'Thu', zh: '四' }, 4],
+  [{ en: 'Fri', zh: '五' }, 5],
+  [{ en: 'Sat', zh: '六' }, 6]
 ];
 
 const usbCommandCatalog = [
-  ['codex_ping', 'Probe USB device; returns codex_pong with device info.'],
-  ['usb_keepalive', 'Marks USB as connected so the MCU does not show red disconnect blink.'],
-  ['set_time', 'Sets MCU clock from computer Unix epoch seconds.'],
-  ['set_config', 'Saves alarm, brightness, and haptic settings to MCU NVS when changed.'],
-  ['codex_busy', 'Shows solid red while Codex is working.'],
-  ['notify_done', 'Stops busy mode, flashes/vibrates, then shows solid green.'],
-  ['codex_idle', 'Clears Codex red/green status and returns to normal LED patterns.'],
-  ['test_led', 'Runs LED hardware test using the current brightness settings.'],
-  ['test_haptic', 'Runs one haptic pulse using the current haptic setting.'],
-  ['stop_alarm', 'Stops the current alarm and enters stopped state.'],
-  ['snooze', 'Snoozes only while alarm/pre-alert is active.']
+  ['codex_ping', { en: 'Probe USB device; returns codex_pong with device info.', zh: '偵測 USB 裝置，回傳 codex_pong 與裝置資訊。' }],
+  ['usb_keepalive', { en: 'Marks USB as connected so the MCU does not show red disconnect blink.', zh: '刷新 USB 連線狀態，避免 MCU 顯示紅燈斷線閃爍。' }],
+  ['set_time', { en: 'Sets MCU clock from computer Unix epoch seconds.', zh: '用電腦 Unix epoch 秒數校正 MCU 時間。' }],
+  ['set_config', { en: 'Saves alarm, brightness, and haptic settings to MCU NVS when changed.', zh: '設定有變更時，將鬧鐘、亮度、震動寫入 MCU NVS。' }],
+  ['codex_busy', { en: 'Shows solid red while Codex is working.', zh: 'Codex 工作中時亮紅燈。' }],
+  ['notify_done', { en: 'Stops busy mode, flashes/vibrates, then shows solid green.', zh: '完成時解除忙碌、閃燈震動，之後亮綠燈。' }],
+  ['codex_idle', { en: 'Clears Codex red/green status and returns to normal LED patterns.', zh: '清除 Codex 紅/綠狀態燈，回到一般燈號。' }],
+  ['test_led', { en: 'Runs LED hardware test using the current brightness settings.', zh: '使用目前亮度設定測試 LED。' }],
+  ['test_haptic', { en: 'Runs one haptic pulse using the current haptic setting.', zh: '使用目前震動強度測試一次震動。' }],
+  ['stop_alarm', { en: 'Stops the current alarm and enters stopped state.', zh: '停止目前鬧鐘並進入停止狀態。' }],
+  ['snooze', { en: 'Snoozes only while alarm/pre-alert is active.', zh: '只有鬧鐘或預警中才會進入貪睡。' }]
 ];
 
 const editableCommandChoices = [
@@ -59,6 +59,90 @@ const defaultCommandActions = [
 ];
 
 const commandActionsStorageKey = 'esp32c3-clock-web.commandActions.v1';
+const languageStorageKey = 'esp32c3-clock-web.language.v1';
+
+const text = {
+  en: {
+    console: 'ESP32-C3 Alarm Console',
+    language: '中文',
+    alarm: 'Alarm',
+    time: 'Time',
+    control: 'Control',
+    on: 'On',
+    off: 'Off',
+    repeat: 'Repeat',
+    prealert: 'Pre-alert',
+    snooze: 'Snooze',
+    maxRing: 'Max ring',
+    alarmEnabled: 'Alarm enabled',
+    version: 'Version',
+    outputs: 'MCU Outputs',
+    mainLeds: 'Main LEDs',
+    flashLed: 'Flash LED',
+    haptic: 'Haptic',
+    notify: 'Notify',
+    connect: 'Connect',
+    apply: 'Apply',
+    usbCommand: 'USB command',
+    appliesFirst: 'Applies settings first',
+    editCommands: 'Edit command buttons',
+    commandBehavior: 'USB command behavior',
+    payload: 'USB Config Payload'
+  },
+  zh: {
+    console: 'ESP32-C3 鬧鐘控制台',
+    language: 'English',
+    alarm: '鬧鐘',
+    time: '時間',
+    control: '控制',
+    on: '開',
+    off: '關',
+    repeat: '重複',
+    prealert: '預提醒',
+    snooze: '貪睡',
+    maxRing: '最長響鈴',
+    alarmEnabled: '啟用鬧鐘',
+    version: '版本',
+    outputs: 'MCU 輸出',
+    mainLeds: '主 LED',
+    flashLed: '閃爍 LED',
+    haptic: '震動',
+    notify: '通知',
+    connect: '連線',
+    apply: '套用',
+    usbCommand: 'USB 指令',
+    appliesFirst: '會先套用設定',
+    editCommands: '編輯指令按鈕',
+    commandBehavior: 'USB 指令行為',
+    payload: 'USB 設定內容'
+  }
+};
+
+const usbStatusText = {
+  'Not connected': { en: 'Not connected', zh: '未連線' },
+  'Browser unsupported': { en: 'Browser unsupported', zh: '瀏覽器不支援' },
+  'Connected': { en: 'Connected', zh: '已連線' },
+  'Opened, no MCU reply': { en: 'Opened, no MCU reply', zh: '已開啟但 MCU 無回應' },
+  'Connection failed': { en: 'Connection failed', zh: '連線失敗' },
+  Disconnected: { en: 'Disconnected', zh: '已斷線' },
+  Sent: { en: 'Sent', zh: '已送出' },
+  'Send failed': { en: 'Send failed', zh: '送出失敗' },
+  'Time synced': { en: 'Time synced', zh: '時間已同步' },
+  'Time sent': { en: 'Time sent', zh: '時間已送出' },
+  'Time sync failed': { en: 'Time sync failed', zh: '時間同步失敗' },
+  'Settings saved': { en: 'Settings saved', zh: '設定已儲存' },
+  'Settings sent': { en: 'Settings sent', zh: '設定已送出' },
+  'Apply failed': { en: 'Apply failed', zh: '套用失敗' }
+};
+
+function localizeUsbStatus(label, language) {
+  return usbStatusText[label]?.[language] || label;
+}
+
+function loadLanguage() {
+  if (typeof window === 'undefined') return 'zh';
+  return window.localStorage.getItem(languageStorageKey) === 'en' ? 'en' : 'zh';
+}
 
 function loadCommandActions() {
   if (typeof window === 'undefined') return defaultCommandActions;
@@ -124,6 +208,7 @@ function delay(ms) {
 }
 
 export default function App() {
+  const [language, setLanguage] = useState(loadLanguage);
   const [config, setConfig] = useState(defaultConfig);
   const [commandActions, setCommandActions] = useState(loadCommandActions);
   const [usbState, setUsbState] = useState({
@@ -136,6 +221,12 @@ export default function App() {
 
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
+  const t = text[language];
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(languageStorageKey, language);
+  }, [language]);
 
   useEffect(() => {
     if (!usbState.connected) return undefined;
@@ -340,23 +431,30 @@ export default function App() {
       <header className="border-b border-stone-300 bg-[#e8eadf]">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">ESP32-C3 Alarm Console</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">{t.console}</p>
             <h1 className="mt-1 text-2xl font-semibold">Codex Done Light</h1>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[320px]">
-            <StatusPill label="Alarm" value={config.enabled ? 'On' : 'Off'} active={config.enabled} />
-            <StatusPill label="Time" value={alarmTime} />
-            <StatusPill label="Control" value="USB" active />
+          <div className="grid grid-cols-4 gap-2 text-center text-xs sm:min-w-[410px]">
+            <StatusPill label={t.alarm} value={config.enabled ? t.on : t.off} active={config.enabled} />
+            <StatusPill label={t.time} value={alarmTime} />
+            <StatusPill label={t.control} value="USB" active />
+            <button
+              type="button"
+              onClick={() => setLanguage((current) => (current === 'zh' ? 'en' : 'zh'))}
+              className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm font-semibold text-stone-700"
+            >
+              {t.language}
+            </button>
           </div>
         </div>
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <section className="space-y-5">
-          <Panel title="Alarm">
+          <Panel title={t.alarm}>
             <div className="grid gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
               <div>
-                <FieldLabel>Time</FieldLabel>
+                <FieldLabel>{t.time}</FieldLabel>
                 <TimeField
                   hour={config.hour}
                   minute={config.minute}
@@ -364,7 +462,7 @@ export default function App() {
                 />
               </div>
               <div>
-                <FieldLabel>Repeat</FieldLabel>
+                <FieldLabel>{t.repeat}</FieldLabel>
                 <div className="grid grid-cols-7 gap-2">
                   {days.map(([label, bit]) => {
                     const selected = (config.repeatMask & (1 << bit)) !== 0;
@@ -379,7 +477,7 @@ export default function App() {
                             : 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
                         }`}
                       >
-                        {label}
+                        {label[language]}
                       </button>
                     );
                   })}
@@ -388,49 +486,49 @@ export default function App() {
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              <RangeField label="Pre-alert" unit="sec" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: value })} />
-              <RangeField label="Snooze" unit="min" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: value })} />
-              <RangeField label="Max ring" unit="sec" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: value })} />
+              <RangeField label={t.prealert} unit="sec" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: value })} />
+              <RangeField label={t.snooze} unit="min" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: value })} />
+              <RangeField label={t.maxRing} unit="sec" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: value })} />
             </div>
 
             <div className="mt-5 flex items-center justify-between border-t border-stone-200 pt-4">
               <div>
-                <div className="text-sm font-semibold">Alarm enabled</div>
-                <div className="text-sm text-stone-500">Version {config.version}</div>
+                <div className="text-sm font-semibold">{t.alarmEnabled}</div>
+                <div className="text-sm text-stone-500">{t.version} {config.version}</div>
               </div>
               <Toggle checked={config.enabled} onClick={() => bumpVersion({ enabled: !config.enabled })} />
             </div>
           </Panel>
 
-          <Panel title="MCU Outputs">
+          <Panel title={t.outputs}>
             <div className="grid gap-4 md:grid-cols-3">
-              <RangeField label="Main LEDs" unit="/10" value={config.ledPairBrightness} onChange={(value) => bumpVersion({ ledPairBrightness: value })} />
-              <RangeField label="Flash LED" unit="/10" value={config.flashLedBrightness} onChange={(value) => bumpVersion({ flashLedBrightness: value })} />
-              <RangeField label="Haptic" unit="/10" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: value })} />
+              <RangeField label={t.mainLeds} unit="/10" value={config.ledPairBrightness} onChange={(value) => bumpVersion({ ledPairBrightness: value })} />
+              <RangeField label={t.flashLed} unit="/10" value={config.flashLedBrightness} onChange={(value) => bumpVersion({ flashLedBrightness: value })} />
+              <RangeField label={t.haptic} unit="/10" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: value })} />
             </div>
           </Panel>
         </section>
 
         <aside className="space-y-5">
-          <Panel title="Notify">
+          <Panel title={t.notify}>
             <div className="grid gap-3">
               <div className="rounded-md border border-stone-300 bg-white p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
                       <span className={`h-2.5 w-2.5 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
-                      <div className="text-sm font-semibold">USB {usbState.label}</div>
+                      <div className="text-sm font-semibold">USB {localizeUsbStatus(usbState.label, language)}</div>
                     </div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 sm:w-[315px]">
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
-                      Connect
+                      {t.connect}
                     </button>
                     <button type="button" onClick={syncUsbTime} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
-                      Time
+                      {t.time}
                     </button>
                     <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
-                      Apply
+                      {t.apply}
                     </button>
                   </div>
                 </div>
@@ -438,8 +536,8 @@ export default function App() {
 
               <div className="rounded-md border border-stone-300 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <FieldLabel>USB command</FieldLabel>
-                  <span className="text-xs font-semibold text-teal-700">Applies settings first</span>
+                  <FieldLabel>{t.usbCommand}</FieldLabel>
+                  <span className="text-xs font-semibold text-teal-700">{t.appliesFirst}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {commandActions.map((action) => (
@@ -457,7 +555,7 @@ export default function App() {
               </div>
 
               <div className="rounded-md border border-stone-300 bg-white p-4">
-                <FieldLabel>Edit command buttons</FieldLabel>
+                <FieldLabel>{t.editCommands}</FieldLabel>
                 <div className="space-y-2">
                   {commandActions.map((action) => (
                     <div key={action.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
@@ -484,12 +582,12 @@ export default function App() {
               </div>
 
               <div className="rounded-md border border-stone-300 bg-white p-4">
-                <FieldLabel>USB command behavior</FieldLabel>
+                <FieldLabel>{t.commandBehavior}</FieldLabel>
                 <div className="divide-y divide-stone-200">
                   {usbCommandCatalog.map(([command, behavior]) => (
                     <div key={command} className="grid gap-1 py-2 sm:grid-cols-[120px_minmax(0,1fr)]">
                       <code className="text-xs font-semibold text-teal-700">{command}</code>
-                      <div className="text-xs leading-5 text-stone-600">{behavior}</div>
+                      <div className="text-xs leading-5 text-stone-600">{behavior[language]}</div>
                     </div>
                   ))}
                 </div>
@@ -497,7 +595,7 @@ export default function App() {
             </div>
           </Panel>
 
-          <Panel title="USB Config Payload">
+          <Panel title={t.payload}>
             <div className="space-y-3">
               <pre className="max-h-[340px] overflow-auto rounded-md bg-stone-950 p-3 text-xs text-stone-100">{jsonText}</pre>
             </div>

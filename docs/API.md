@@ -61,14 +61,3 @@ The console command buttons are editable. Button labels and command mappings are
 ## Persisted Settings
 
 When `set_config` changes alarm/output settings, the MCU saves them to ESP32 NVS (`Preferences`) so they survive reboot and power loss. Unchanged payloads skip the NVS write.
-
-## Legacy HTTP/Cloud
-
-The repository still contains old local HTTP and signed static JSON references, but the current MCU runtime keeps Wi-Fi off and the starter config sets:
-
-```cpp
-#define ALARM_ENABLE_CLOUD_SYNC false
-#define ALARM_ENABLE_LOCAL_API false
-```
-
-Use USB for config, commands, and time sync.

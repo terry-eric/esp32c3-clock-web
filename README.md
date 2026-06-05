@@ -7,7 +7,6 @@ USB-first alarm controller for an ESP32-C3 alarm device. The browser console tal
 ```text
 src/                                      USB alarm console
 scripts/notify_mcu.py                    Codex/Gemini done notifier
-public/devices/alarm_c3_001.json          Legacy signed config example
 esp32c3_alarm_external_api_complete/      ESP32-C3 firmware
   arduino_secrets.example.h               Public starter settings
   arduino_secrets.h                       Local settings, ignored by git
@@ -26,8 +25,6 @@ Edit only `arduino_secrets.h`:
 ```cpp
 #define ALARM_DEVICE_ID "alarm_c3_001"
 #define ALARM_DEVICE_NAME "Codex Done Light"
-#define ALARM_ENABLE_CLOUD_SYNC false
-#define ALARM_ENABLE_LOCAL_API false
 ```
 
 Wi-Fi is disabled in the firmware runtime. Control and time sync are done over USB. Do not commit `arduino_secrets.h`.
@@ -87,15 +84,3 @@ MCU_NOTIFY_STATE=done
 ```
 
 Leave `MCU_NOTIFY_PORT` empty to auto-detect the MCU with `codex_ping`. Set it to `COM4` only if you want to force one port.
-
-## Legacy Signed Config
-
-The repo still includes `public/devices/alarm_c3_001.json` and signing scripts as an old reference. The current firmware runtime does not use Wi-Fi/cloud sync.
-
-## Cloudflare Pages
-
-```text
-Framework preset: None
-Build command: npm run build
-Build output directory: dist
-```
