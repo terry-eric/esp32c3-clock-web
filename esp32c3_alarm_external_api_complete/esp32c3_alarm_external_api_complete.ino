@@ -1153,7 +1153,7 @@ void executeCloudCommand(int commandId, String command, int effectFromCommand) {
 }
 
 // ============================================================
-// Config sync from website
+// Config apply helpers
 // ============================================================
 
 bool applyConfigFromJson(JsonVariantConst doc) {
@@ -1270,6 +1270,31 @@ void handleUsbCommandLine(String line) {
     Serial.print(DEVICE_ID);
     Serial.print(" ");
     Serial.println(DEVICE_NAME);
+    return;
+  }
+
+  if (command == "set_config") {
+    String jsonText = separatorIndex > 0 ? line.substring(separatorIndex + 1) : "";
+    jsonText.trim();
+
+    StaticJsonDocument<768> doc;
+    DeserializationError err = deserializeJson(doc, jsonText);
+    if (err) {
+      Serial.print("[USB] Config JSON parse error: ");
+      Serial.println(err.c_str());
+      return;
+    }
+
+    doc["deviceId"] = DEVICE_ID;
+    doc["version"] = alarmConfig.version + 1;
+    doc["commandId"] = lastCloudCommandId;
+    doc["command"] = "none";
+
+    if (applyConfigFromJson(doc.as<JsonVariantConst>())) {
+      Serial.println("usb_config_ok");
+    } else {
+      Serial.println("usb_config_rejected");
+    }
     return;
   }
 

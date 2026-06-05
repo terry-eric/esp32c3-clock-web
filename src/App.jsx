@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 
 const defaultConfig = {
   deviceId: 'alarm_c3_001',
@@ -13,9 +13,7 @@ const defaultConfig = {
   hapticEffect: 10,
   ledPairBrightness: 4,
   flashLedBrightness: 10,
-  version: 1,
-  commandId: 0,
-  command: 'none'
+  version: 1
 };
 
 const days = [
@@ -29,7 +27,6 @@ const days = [
 ];
 
 const commandOptions = [
-  ['none', 'No command'],
   ['notify_done', 'Done alert'],
   ['test_led', 'Test LEDs'],
   ['test_haptic', 'Test haptic'],
@@ -52,28 +49,23 @@ function clampMinute(value) {
   return Math.min(59, Math.max(0, Math.round(value)));
 }
 
-function signedPayload(config) {
-  return [
-    config.deviceId,
-    config.enabled ? '1' : '0',
-    config.hour,
-    config.minute,
-    config.repeatMask,
-    config.prealertSec,
-    config.snoozeMin,
-    config.maxRingSec,
-    config.hapticEffect,
-    config.ledPairBrightness,
-    config.flashLedBrightness,
-    config.version,
-    config.commandId,
-    config.command
-  ].join('|');
-}
-
 function toJson(config) {
-  const { deviceName, ...signedConfig } = config;
-  return JSON.stringify({ ...signedConfig, signature: '<run sign-config.mjs>' }, null, 2);
+  return JSON.stringify(
+    {
+      enabled: config.enabled,
+      hour: config.hour,
+      minute: config.minute,
+      repeatMask: config.repeatMask,
+      prealertSec: config.prealertSec,
+      snoozeMin: config.snoozeMin,
+      maxRingSec: config.maxRingSec,
+      hapticEffect: config.hapticEffect,
+      ledPairBrightness: config.ledPairBrightness,
+      flashLedBrightness: config.flashLedBrightness
+    },
+    null,
+    2
+  );
 }
 
 function formatTime(config) {
@@ -94,37 +86,8 @@ export default function App() {
   });
   const serialPortRef = useRef(null);
 
-  const publicPath = useMemo(() => `/devices/${config.deviceId}.json`, [config.deviceId]);
-  const payload = useMemo(() => signedPayload(config), [config]);
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
-  const syncUrl = `https://esp32c3-clock-web.pages.dev${publicPath}`;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadPublishedConfig() {
-      try {
-        const response = await fetch(`/devices/${defaultConfig.deviceId}.json`, { cache: 'no-store' });
-        if (!response.ok) return;
-        const published = await response.json();
-        if (cancelled) return;
-
-        setConfig((current) => ({
-          ...current,
-          ...published,
-          deviceName: current.deviceName
-        }));
-      } catch {
-        // Keep local defaults when the static JSON is unavailable in dev.
-      }
-    }
-
-    loadPublishedConfig();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   function update(patch) {
     setConfig((current) => ({ ...current, ...patch }));
@@ -135,14 +98,6 @@ export default function App() {
       ...current,
       ...patch,
       version: current.version + 1
-    }));
-  }
-
-  function queueCommand(command) {
-    setConfig((current) => ({
-      ...current,
-      command,
-      commandId: current.commandId + 1
     }));
   }
 
@@ -159,7 +114,7 @@ export default function App() {
     }
   }
 
-  async function readUsbReply(timeoutMs = 1800) {
+  async function readUsbReply(matcher = 'codex_pong', timeoutMs = 1800) {
     if (!serialPortRef.current || !serialPortRef.current.readable) return '';
 
     const reader = serialPortRef.current.readable.getReader();
@@ -170,7 +125,7 @@ export default function App() {
     }, timeoutMs);
 
     try {
-      while (!reply.includes('codex_pong')) {
+      while (!reply.includes(matcher)) {
         const result = await reader.read();
         if (result.done) break;
         if (result.value) reply += decoder.decode(result.value, { stream: true });
@@ -201,7 +156,7 @@ export default function App() {
 
       await delay(900);
       await writeUsbLine('codex_ping');
-      const reply = await readUsbReply();
+      const reply = await readUsbReply('codex_pong');
       const connected = reply.includes('codex_pong');
 
       setUsbState({
@@ -238,6 +193,55 @@ export default function App() {
     }
   }
 
+  async function sendUsbCommand(command) {
+    try {
+      await writeUsbLine(`${command} ${config.hapticEffect}`);
+      setUsbState((current) => ({
+        ...current,
+        label: 'Sent',
+        detail: command
+      }));
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Send failed',
+        detail: error.message
+      }));
+    }
+  }
+
+  async function applyUsbConfig() {
+    try {
+      const body = {
+        enabled: config.enabled,
+        hour: config.hour,
+        minute: config.minute,
+        repeatMask: config.repeatMask,
+        prealertSec: config.prealertSec,
+        snoozeMin: config.snoozeMin,
+        maxRingSec: config.maxRingSec,
+        hapticEffect: config.hapticEffect,
+        ledPairBrightness: config.ledPairBrightness,
+        flashLedBrightness: config.flashLedBrightness
+      };
+      await writeUsbLine(`set_config ${JSON.stringify(body)}`);
+      const reply = await readUsbReply('usb_config_', 1800);
+      setUsbState((current) => ({
+        ...current,
+        label: reply.includes('usb_config_ok') ? 'Settings saved' : 'Settings sent',
+        detail: reply || 'set_config sent'
+      }));
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Apply failed',
+        detail: error.message
+      }));
+    }
+  }
+
   return (
     <main className="min-h-screen bg-[#f4f5f0] text-stone-950">
       <header className="border-b border-stone-300 bg-[#e8eadf]">
@@ -249,7 +253,7 @@ export default function App() {
           <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[360px]">
             <StatusPill label="Alarm" value={config.enabled ? 'On' : 'Off'} active={config.enabled} />
             <StatusPill label="Time" value={alarmTime} />
-            <StatusPill label="Cloud cmd" value={config.command === 'none' ? 'Idle' : config.command} active={config.command !== 'none'} />
+            <StatusPill label="Control" value="USB" active />
           </div>
         </div>
       </header>
@@ -341,15 +345,8 @@ export default function App() {
                     <button type="button" onClick={connectUsb} className="h-10 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       Connect
                     </button>
-                    <button
-                      type="button"
-                      onClick={sendUsbDone}
-                      disabled={!usbState.connected}
-                      className={`h-10 rounded-md px-3 text-sm font-semibold ${
-                        usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'
-                      }`}
-                    >
-                      Send
+                    <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                      Apply
                     </button>
                   </div>
                 </div>
@@ -357,22 +354,17 @@ export default function App() {
 
               <div className="rounded-md border border-stone-300 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <FieldLabel>Website command</FieldLabel>
-                  <span className={`text-xs font-semibold ${config.command === 'none' ? 'text-stone-400' : 'text-amber-700'}`}>
-                    {config.command === 'none' ? 'Idle' : 'Queued for sync'}
-                  </span>
+                  <FieldLabel>USB command</FieldLabel>
+                  <span className="text-xs font-semibold text-teal-700">Immediate</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {commandOptions.map(([value, label]) => (
                     <button
                       key={value}
                       type="button"
-                      onClick={() => queueCommand(value)}
-                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${
-                        config.command === value
-                          ? 'border-amber-600 bg-amber-100 text-amber-900'
-                          : 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
-                      }`}
+                      onClick={() => sendUsbCommand(value)}
+                      disabled={!usbState.connected}
+                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${usbState.connected ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500' : 'border-stone-200 bg-stone-100 text-stone-400'}`}
                     >
                       {label}
                     </button>
@@ -382,24 +374,9 @@ export default function App() {
             </div>
           </Panel>
 
-          <Panel title="Signed JSON">
+          <Panel title="USB Config Payload">
             <div className="space-y-3">
-              <div className="rounded-md border border-stone-300 bg-white p-3">
-                <FieldLabel>Cloud URL</FieldLabel>
-                <code className="block break-all text-xs text-stone-700">{syncUrl}</code>
-              </div>
               <pre className="max-h-[340px] overflow-auto rounded-md bg-stone-950 p-3 text-xs text-stone-100">{jsonText}</pre>
-            </div>
-          </Panel>
-
-          <Panel title="Signature">
-            <div className="rounded-md bg-stone-950 p-3 font-mono text-xs text-stone-100">
-              <p>$env:ALARM_CONFIG_HMAC_SECRET=&quot;your-private-signing-secret&quot;</p>
-              <p>npm run sign:config</p>
-            </div>
-            <div className="mt-3">
-              <FieldLabel>Payload</FieldLabel>
-              <pre className="max-h-[120px] overflow-auto rounded-md bg-white p-3 text-xs text-stone-700">{payload}</pre>
             </div>
           </Panel>
         </aside>

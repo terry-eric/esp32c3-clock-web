@@ -1,90 +1,44 @@
-# Signed Static Config
+# USB Control API
 
-There is no backend API. The MCU fetches one public JSON file:
-
-```text
-GET https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json
-```
-
-Example:
-
-```json
-{
-  "deviceId": "alarm_c3_001",
-  "enabled": true,
-  "hour": 7,
-  "minute": 30,
-  "repeatMask": 62,
-  "prealertSec": 10,
-  "snoozeMin": 5,
-  "maxRingSec": 10,
-  "hapticEffect": 10,
-  "ledPairBrightness": 4,
-  "flashLedBrightness": 10,
-  "version": 1,
-  "commandId": 0,
-  "command": "none",
-  "signature": "..."
-}
-```
-
-## Signed Payload
-
-The signature is HMAC-SHA256 over this exact payload:
-
-```text
-deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|ledPairBrightness|flashLedBrightness|version|commandId|command
-```
-
-`enabled` is encoded as `1` or `0`.
-
-For the example above:
-
-```text
-alarm_c3_001|1|7|30|62|10|5|10|10|4|10|1|0|none
-```
+The primary control path is USB serial at `115200` baud. No Wi-Fi, IP address, or cloud deploy is required.
 
 ## Commands
 
-Signed static JSON is not real time. If `commandId` increases and `command` is not `none`, the MCU runs that signed command on its next cloud sync.
+```text
+codex_ping
+notify_done 10
+test_led
+test_haptic 10
+stop_alarm
+snooze
+set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightness":4}
+```
 
-Cloud commands use a separate persisted command cursor from USB/local commands.
-This prevents repeated USB tests from making a later website command look stale.
-The web console loads the currently published JSON first, then increments
-`commandId` from that value when you queue a website command.
-
-## Local Vibe Notification
-
-The MCU exposes immediate local commands by HTTP when its IP is known:
+`codex_ping` returns:
 
 ```text
-POST http://<MCU-IP>/api/local/command
+codex_pong alarm_c3_001 Codex Done Light
 ```
 
-Body:
+`set_config` returns one of:
 
-```json
-{
-  "command": "notify_done",
-  "hapticEffect": 10
-}
+```text
+usb_config_ok
+usb_config_rejected
 ```
 
-Use it from `scripts/notify_mcu.py` when Codex/Gemini finishes coding.
+The web console uses Web Serial in Chrome or Edge to send the same commands.
 
-The same script can also notify over USB serial with no IP:
+## Persisted Settings
 
-```powershell
-python scripts\notify_mcu.py --mode usb
+When `set_config` changes alarm/output settings, the MCU saves them to ESP32 NVS (`Preferences`) so they survive reboot and power loss. Unchanged payloads skip the NVS write.
+
+## Legacy HTTP/Cloud
+
+The firmware still contains local HTTP and signed static JSON support for reference, but the starter config sets:
+
+```cpp
+#define ALARM_ENABLE_CLOUD_SYNC false
 ```
 
-The Cloudflare web console can also connect over USB in Chrome or Edge. It shows connected only after the MCU replies to `codex_ping` with `codex_pong`.
-
-For website delivery, use signed cloud mode:
-
-```powershell
-$env:ALARM_CONFIG_HMAC_SECRET="your-private-signing-secret"
-python scripts\notify_mcu.py --mode cloud
-```
-
-Then deploy the changed `public/devices/alarm_c3_001.json`. The MCU will run `notify_done` on its next cloud sync.
+Use USB unless you intentionally re-enable Wi-Fi/cloud sync.

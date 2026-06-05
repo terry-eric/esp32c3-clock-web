@@ -13,9 +13,10 @@
 #define ALARM_DEVICE_ID "alarm_c3_001"
 #define ALARM_DEVICE_NAME "Codex Done Light"
 
-// No backend is required. The MCU fetches this public signed JSON file.
+// USB-first starter: cloud sync is off by default. Turn it on only if you
+// intentionally want the MCU to fetch signed JSON from a website.
 #define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"
-#define ALARM_ENABLE_CLOUD_SYNC true
+#define ALARM_ENABLE_CLOUD_SYNC false
 
 // Demo-only signing secret. This public example matches the checked-in JSON,
 // so the sample can run after you copy this file. Change it for real use.
