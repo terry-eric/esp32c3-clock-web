@@ -47,7 +47,7 @@ The console command buttons are editable. Button labels and command mappings are
 | Command | Behavior |
 | --- | --- |
 | `codex_ping` | Probes the MCU and returns `codex_pong alarm_c3_001 Codex Done Light`. |
-| `usb_keepalive` | Refreshes the USB-connected timer. If the MCU does not receive USB traffic for about 15 seconds, it blinks the red status LED. |
+| `usb_keepalive` | Keeps the serial session active. Red blink is based on USB time sync failure/staleness, not keepalive loss. |
 | `set_time` | Sets the MCU clock from Unix epoch seconds. |
 | `set_config` | Applies alarm/output fields and writes changed values to NVS. |
 | `codex_busy` | Shows solid red while Codex is working. |

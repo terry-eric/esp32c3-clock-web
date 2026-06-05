@@ -111,7 +111,7 @@ const bool TOUCH_ACTIVE_HIGH = false;
 // ============================================================
 
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
-const unsigned long USB_CONNECTED_TIMEOUT_MS      = 15000;
+const unsigned long USB_TIME_SYNC_TIMEOUT_MS      = 65UL * 60UL * 1000UL;
 
 const unsigned long BUTTON_DEBOUNCE_MS            = 35;
 const unsigned long LONG_PRESS_MS                 = 2000;
@@ -182,6 +182,7 @@ time_t snoozeUntil = 0;
 int lastCommandId = 0;
 String lastAction = "BOOT";
 unsigned long lastUsbSeenMs = 0;
+unsigned long lastUsbTimeSyncMs = 0;
 bool codexBusyLight = false;
 bool codexDoneLight = false;
 
@@ -302,8 +303,8 @@ void allLedOff() {
   writeLedFlash(false);
 }
 
-bool usbRecentlySeen() {
-  return lastUsbSeenMs > 0 && millis() - lastUsbSeenMs <= USB_CONNECTED_TIMEOUT_MS;
+bool usbTimeRecentlySynced() {
+  return timeOK && lastUsbTimeSyncMs > 0 && millis() - lastUsbTimeSyncMs <= USB_TIME_SYNC_TIMEOUT_MS;
 }
 
 void previewLedBrightness() {
@@ -433,6 +434,7 @@ bool setTimeFromEpoch(time_t epochSeconds) {
 
   setupLocalTimezone();
   timeOK = true;
+  lastUsbTimeSyncMs = millis();
 
   if (stateNow == STATE_TIME_INVALID || stateNow == STATE_BOOT) {
     enterState(drvOK ? STATE_IDLE : STATE_DRV_FAIL);
@@ -999,7 +1001,7 @@ void updateButton() {
 void updateLedPattern() {
   unsigned long nowMs = millis();
 
-  if (!usbRecentlySeen()) {
+  if (!usbTimeRecentlySynced()) {
     writeStatusGreen(false);
     writeStatusRed((nowMs / 500) % 2);
     writeLedFlash(false);

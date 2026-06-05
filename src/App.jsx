@@ -26,7 +26,7 @@ const days = [
 
 const usbCommandCatalog = [
   ['codex_ping', { en: 'Probe USB device; returns codex_pong with device info.', zh: '偵測 USB 裝置，回傳 codex_pong 與裝置資訊。' }],
-  ['usb_keepalive', { en: 'Marks USB as connected so the MCU does not show red disconnect blink.', zh: '刷新 USB 連線狀態，避免 MCU 顯示紅燈斷線閃爍。' }],
+  ['usb_keepalive', { en: 'Keeps the serial session active. The red blink depends on successful USB time sync.', zh: '維持序列連線活著；紅燈閃爍改由 USB 校時是否成功決定。' }],
   ['set_time', { en: 'Sets MCU clock from computer Unix epoch seconds.', zh: '用電腦 Unix epoch 秒數校正 MCU 時間。' }],
   ['set_config', { en: 'Saves alarm, brightness, and haptic settings to MCU NVS when changed.', zh: '設定有變更時，將鬧鐘、亮度、震動寫入 MCU NVS。' }],
   ['codex_busy', { en: 'Shows solid red while Codex is working.', zh: 'Codex 工作中時亮紅燈。' }],
@@ -49,13 +49,13 @@ const editableCommandChoices = [
 ];
 
 const defaultCommandActions = [
-  { id: 'busy', label: 'Codex busy', command: 'codex_busy' },
-  { id: 'done', label: 'Done alert', command: 'notify_done' },
-  { id: 'idle', label: 'Clear status', command: 'codex_idle' },
-  { id: 'leds', label: 'Test LEDs', command: 'test_led' },
-  { id: 'haptic', label: 'Test haptic', command: 'test_haptic' },
-  { id: 'stop', label: 'Stop alarm', command: 'stop_alarm' },
-  { id: 'snooze', label: 'Snooze', command: 'snooze' }
+  { id: 'busy', labels: { en: 'Codex busy', zh: 'Codex 工作中' }, command: 'codex_busy' },
+  { id: 'done', labels: { en: 'Done alert', zh: '完成提醒' }, command: 'notify_done' },
+  { id: 'idle', labels: { en: 'Clear status', zh: '清除狀態' }, command: 'codex_idle' },
+  { id: 'leds', labels: { en: 'Test LEDs', zh: '測試 LED' }, command: 'test_led' },
+  { id: 'haptic', labels: { en: 'Test haptic', zh: '測試震動' }, command: 'test_haptic' },
+  { id: 'stop', labels: { en: 'Stop alarm', zh: '停止鬧鐘' }, command: 'stop_alarm' },
+  { id: 'snooze', labels: { en: 'Snooze', zh: '貪睡' }, command: 'snooze' }
 ];
 
 const commandActionsStorageKey = 'esp32c3-clock-web.commandActions.v1';
@@ -154,11 +154,15 @@ function loadCommandActions() {
     return defaultCommandActions.map((fallback) => {
       const item = saved.find((candidate) => candidate.id === fallback.id);
       if (!item || !editableCommandChoices.includes(item.command)) return fallback;
-      return {
-        ...fallback,
-        label: typeof item.label === 'string' && item.label.trim() ? item.label : fallback.label,
-        command: item.command
-      };
+      const labels = { ...fallback.labels };
+      if (item.labels && typeof item.labels === 'object') {
+        if (typeof item.labels.en === 'string' && item.labels.en.trim()) labels.en = item.labels.en;
+        if (typeof item.labels.zh === 'string' && item.labels.zh.trim()) labels.zh = item.labels.zh;
+      } else if (typeof item.label === 'string' && item.label.trim()) {
+        labels.en = item.label;
+      }
+
+      return { ...fallback, labels, command: item.command };
     });
   } catch {
     return defaultCommandActions;
@@ -548,7 +552,7 @@ export default function App() {
                       disabled={!usbState.connected}
                       className={`h-10 rounded-md border px-2 text-sm font-semibold ${usbState.connected ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500' : 'border-stone-200 bg-stone-100 text-stone-400'}`}
                     >
-                      {action.label}
+                      {action.labels[language]}
                     </button>
                   ))}
                 </div>
@@ -561,8 +565,12 @@ export default function App() {
                     <div key={action.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
                       <input
                         type="text"
-                        value={action.label}
-                        onChange={(event) => updateCommandAction(action.id, { label: event.target.value })}
+                        value={action.labels[language]}
+                        onChange={(event) =>
+                          updateCommandAction(action.id, {
+                            labels: { ...action.labels, [language]: event.target.value }
+                          })
+                        }
                         className="h-10 min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
                       />
                       <select

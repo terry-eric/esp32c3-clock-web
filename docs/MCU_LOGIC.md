@@ -51,7 +51,7 @@ snooze
 set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightness":4}
 ```
 
-`usb_keepalive` refreshes the USB-connected timer. If no USB traffic arrives for about 15 seconds, the MCU blinks the red status LED.
+`usb_keepalive` keeps the serial session active. The MCU blinks the red status LED when USB time sync has not succeeded yet or has not refreshed within about 65 minutes.
 `codex_busy` shows solid red while Codex is working. `notify_done` clears busy, flashes/vibrates, then shows solid green. `codex_idle` clears the Codex status light.
 `set_config` applies the provided alarm/output fields, clamps safe ranges, and writes changed settings to NVS.
 `set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. The web console sends it on connect and once per hour while USB stays connected.
