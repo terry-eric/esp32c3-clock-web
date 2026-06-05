@@ -18,11 +18,11 @@ Alternatively, create a local `.env` file in this repo. It is ignored by git, an
 MCU_NOTIFY_MODE=auto
 MCU_NOTIFY_URL=
 MCU_NOTIFY_TOKEN=<local-token-if-enabled>
-MCU_NOTIFY_PORT=COM4
+MCU_NOTIFY_PORT=
 MCU_NOTIFY_EFFECT=10
 ```
 
-Use `MCU_NOTIFY_MODE=usb` when the device is connected by USB and you do not know its IP. Use `MCU_NOTIFY_MODE=cloud` only when you want to queue a signed command through the website JSON and deploy it; this is not immediate.
+Use `MCU_NOTIFY_MODE=usb` when the device is connected by USB and you do not know its IP. The script auto-detects the Codex MCU by sending `codex_ping`; set `MCU_NOTIFY_PORT=COM4` only to force a port. Use `MCU_NOTIFY_MODE=cloud` only when you want to queue a signed command through the website JSON and deploy it; this is not immediate.
 
 ## Slash Prompt
 

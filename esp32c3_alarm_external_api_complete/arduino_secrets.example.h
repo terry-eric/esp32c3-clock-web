@@ -11,6 +11,7 @@
 #define ALARM_BOOT_STABILIZE_MS 1000UL
 
 #define ALARM_DEVICE_ID "alarm_c3_001"
+#define ALARM_DEVICE_NAME "Codex Done Light"
 
 // No backend is required. The MCU fetches this public signed JSON file.
 #define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"

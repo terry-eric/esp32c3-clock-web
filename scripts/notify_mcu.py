@@ -82,42 +82,75 @@ def serial_ports(preferred_port):
     return [f"COM{index}" for index in range(1, 33)]
 
 
-def notify_usb(port, effect):
-    command = f"notify_done {effect}"
+def run_serial_command(port, command, read_reply=False):
+    read_block = ""
+    if read_reply:
+        read_block = (
+            "$deadline=(Get-Date).AddMilliseconds(1800);"
+            "$reply='';"
+            "while((Get-Date) -lt $deadline -and -not $reply.Contains('codex_pong')){"
+            "try{$reply += $p.ReadExisting()}catch{};"
+            "Start-Sleep -Milliseconds 80;"
+            "};"
+            "Write-Output $reply;"
+        )
+
     ps_script = (
         "$ErrorActionPreference='Stop';"
         f"$p=New-Object System.IO.Ports.SerialPort('{port}',115200,'None',8,'One');"
-        "$p.ReadTimeout=1000;"
+        "$p.ReadTimeout=250;"
         "$p.WriteTimeout=1000;"
         "$p.DtrEnable=$false;"
         "$p.RtsEnable=$false;"
         "$p.Open();"
-        "Start-Sleep -Milliseconds 1200;"
+        "Start-Sleep -Milliseconds 600;"
         f"$p.WriteLine('{command}');"
-        "Start-Sleep -Milliseconds 200;"
+        f"{read_block}"
+        "Start-Sleep -Milliseconds 150;"
         "$p.Close();"
     )
-    subprocess.run(
+    return subprocess.run(
         ["powershell", "-NoProfile", "-Command", ps_script],
         check=True,
         capture_output=True,
         text=True,
         timeout=8,
     )
+
+
+def probe_usb(port):
+    result = run_serial_command(port, "codex_ping", read_reply=True)
+    reply = (result.stdout or "").strip()
+    if "codex_pong" not in reply:
+        return ""
+    return " ".join(reply.split())
+
+
+def notify_usb(port, effect):
+    command = f"notify_done {effect}"
+    run_serial_command(port, command)
     print(f"MCU notified by USB serial: {port} -> {command}")
 
 
 def notify_usb_auto(preferred_port, effect):
     failures = []
+    if preferred_port:
+        notify_usb(preferred_port, effect)
+        return
+
     for port in serial_ports(preferred_port):
         try:
+            reply = probe_usb(port)
+            if not reply:
+                continue
+            print(f"Found MCU on {port}: {reply}")
             notify_usb(port, effect)
             return
         except Exception as exc:
             failures.append(f"{port}: {exc}")
 
-    hint = "Close Arduino Serial Monitor/Plotter and check the selected COM port."
-    raise SystemExit(f"USB notify failed. {hint}")
+    hint = "Close Arduino Serial Monitor/Plotter, plug in the MCU, or pass --port COMx."
+    raise SystemExit(f"USB notify failed: no Codex MCU replied to codex_ping. {hint}")
 
 
 def queue_cloud_command(config_path, secret, effect):

@@ -160,7 +160,12 @@ const bool WIFI_SLEEP = ALARM_WIFI_SLEEP;
 #define ALARM_DEVICE_ID "alarm_c3_001"
 #endif
 
+#ifndef ALARM_DEVICE_NAME
+#define ALARM_DEVICE_NAME "Codex Done Light"
+#endif
+
 const char* DEVICE_ID = ALARM_DEVICE_ID;
+const char* DEVICE_NAME = ALARM_DEVICE_NAME;
 
 // 外部網站 API。
 // 先用 http 比較好測試；如果你的網站是 https，也可以直接填 https://...
@@ -1197,6 +1202,14 @@ void handleUsbCommandLine(String line) {
   }
 
   command.trim();
+  if (command == "codex_ping") {
+    Serial.print("codex_pong ");
+    Serial.print(DEVICE_ID);
+    Serial.print(" ");
+    Serial.println(DEVICE_NAME);
+    return;
+  }
+
   if (!isAllowedLocalCommand(command)) {
     Serial.print("[USB] Unsupported command: ");
     Serial.println(command);
@@ -1272,6 +1285,7 @@ bool syncConfigFromServer() {
 
 void fillConfigJsonObject(JsonObject doc) {
   doc["deviceId"] = DEVICE_ID;
+  doc["deviceName"] = DEVICE_NAME;
   doc["enabled"] = alarmConfig.enabled;
   doc["hour"] = alarmConfig.hour;
   doc["minute"] = alarmConfig.minute;
@@ -1289,6 +1303,7 @@ void fillConfigJsonObject(JsonObject doc) {
 
 void fillStatusJsonObject(JsonObject doc) {
   doc["deviceId"] = DEVICE_ID;
+  doc["deviceName"] = DEVICE_NAME;
   doc["online"] = true;
   doc["state"] = stateToString(stateNow);
 
@@ -2009,6 +2024,8 @@ void setup() {
   Serial.println();
   Serial.println("======================================================");
   Serial.println(" ESP32-C3 Super Mini Alarm - External API Version");
+  Serial.print(" Device: ");
+  Serial.println(DEVICE_NAME);
   Serial.println("======================================================");
 
   WiFi.onEvent(onWiFiEvent);

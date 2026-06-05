@@ -12,7 +12,7 @@ If `python` is unavailable, try:
 py scripts\notify_mcu.py
 ```
 
-The notifier supports HTTP/IP, USB serial, and signed cloud JSON modes. Use only these local environment variables:
+The notifier supports HTTP/IP, auto-detected USB serial, and signed cloud JSON modes. Use only these local environment variables:
 
 - `MCU_NOTIFY_MODE`
 - `MCU_NOTIFY_URL`

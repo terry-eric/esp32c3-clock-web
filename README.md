@@ -144,14 +144,14 @@ Or create a local `.env` file in this repo. It is ignored by git, and `scripts/n
 MCU_NOTIFY_MODE=auto
 MCU_NOTIFY_URL=
 MCU_NOTIFY_TOKEN=<local-token-if-enabled>
-MCU_NOTIFY_PORT=COM4
+MCU_NOTIFY_PORT=
 MCU_NOTIFY_EFFECT=10
 ```
 
 Notification modes:
 
 - `auto`: try HTTP when `MCU_NOTIFY_URL` is set, otherwise try USB serial.
-- `usb`: send `notify_done` over a USB COM port, no IP needed.
+- `usb`: auto-detect the Codex MCU over USB serial, no IP needed. Set `MCU_NOTIFY_PORT=COM4` only if you want to force one port.
 - `cloud`: update and sign `public/devices/alarm_c3_001.json`; deploy it, then the MCU runs the command on its next cloud sync.
 
 Then create:

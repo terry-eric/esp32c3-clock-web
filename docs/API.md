@@ -70,7 +70,7 @@ Use it from `scripts/notify_mcu.py` when Codex/Gemini finishes coding.
 The same script can also notify over USB serial with no IP:
 
 ```powershell
-python scripts\notify_mcu.py --mode usb --port COM4
+python scripts\notify_mcu.py --mode usb
 ```
 
 For website delivery, use signed cloud mode:
