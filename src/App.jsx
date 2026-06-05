@@ -48,14 +48,24 @@ const editableCommandChoices = [
   'snooze'
 ];
 
+const lightModeChoices = ['off', 'on', 'blink', 'toggle'];
+
+const defaultPattern = {
+  green: 'off',
+  red: 'off',
+  flash: 'off',
+  intervalMs: 180,
+  count: 3
+};
+
 const defaultCommandActions = [
-  { id: 'busy', labels: { en: 'Codex busy', zh: 'Codex 工作中' }, command: 'codex_busy' },
-  { id: 'done', labels: { en: 'Done alert', zh: '完成提醒' }, command: 'notify_done' },
-  { id: 'idle', labels: { en: 'Clear status', zh: '清除狀態' }, command: 'codex_idle' },
-  { id: 'leds', labels: { en: 'Test LEDs', zh: '測試 LED' }, command: 'test_led' },
-  { id: 'haptic', labels: { en: 'Test haptic', zh: '測試震動' }, command: 'test_haptic' },
-  { id: 'stop', labels: { en: 'Stop alarm', zh: '停止鬧鐘' }, command: 'stop_alarm' },
-  { id: 'snooze', labels: { en: 'Snooze', zh: '貪睡' }, command: 'snooze' }
+  { id: 'busy', labels: { en: 'Codex busy', zh: 'Codex 工作中' }, command: 'codex_busy', pattern: { green: 'off', red: 'on', flash: 'off', intervalMs: 180, count: 1 } },
+  { id: 'done', labels: { en: 'Done alert', zh: '完成提醒' }, command: 'notify_done', pattern: { green: 'blink', red: 'off', flash: 'blink', intervalMs: 180, count: 6 } },
+  { id: 'idle', labels: { en: 'Clear status', zh: '清除狀態' }, command: 'codex_idle', pattern: { green: 'off', red: 'off', flash: 'off', intervalMs: 180, count: 1 } },
+  { id: 'leds', labels: { en: 'Test LEDs', zh: '測試 LED' }, command: 'test_led', pattern: { green: 'toggle', red: 'toggle', flash: 'blink', intervalMs: 150, count: 6 } },
+  { id: 'haptic', labels: { en: 'Test haptic', zh: '測試震動' }, command: 'test_haptic', pattern: { green: 'off', red: 'off', flash: 'blink', intervalMs: 180, count: 2 } },
+  { id: 'stop', labels: { en: 'Stop alarm', zh: '停止鬧鐘' }, command: 'stop_alarm', pattern: { green: 'on', red: 'on', flash: 'off', intervalMs: 180, count: 2 } },
+  { id: 'snooze', labels: { en: 'Snooze', zh: '貪睡' }, command: 'snooze', pattern: { green: 'blink', red: 'off', flash: 'off', intervalMs: 250, count: 4 } }
 ];
 
 const commandActionsStorageKey = 'esp32c3-clock-web.commandActions.v1';
@@ -86,8 +96,18 @@ const text = {
     usbCommand: 'USB command',
     appliesFirst: 'Applies settings first',
     editCommands: 'Edit command buttons',
+    commandPattern: 'Command light pattern',
     commandBehavior: 'USB command behavior',
-    payload: 'USB Config Payload'
+    payload: 'USB Config Payload',
+    greenLed: 'Green',
+    redLed: 'Red',
+    flashLedShort: 'Flash',
+    interval: 'Interval',
+    count: 'Count',
+    offMode: 'Off',
+    onMode: 'On',
+    blinkMode: 'Blink',
+    toggleMode: 'Toggle'
   },
   zh: {
     console: 'ESP32-C3 鬧鐘控制台',
@@ -113,10 +133,30 @@ const text = {
     usbCommand: 'USB 指令',
     appliesFirst: '會先套用設定',
     editCommands: '編輯指令按鈕',
+    commandPattern: '指令燈號調整',
     commandBehavior: 'USB 指令行為',
-    payload: 'USB 設定內容'
+    payload: 'USB 設定內容',
+    greenLed: '綠燈',
+    redLed: '紅燈',
+    flashLedShort: 'Flash LED',
+    interval: '間隔',
+    count: '次數',
+    offMode: '滅',
+    onMode: '亮',
+    blinkMode: '閃爍',
+    toggleMode: '切換'
   }
 };
+
+function modeLabel(mode, language) {
+  const keyByMode = {
+    off: 'offMode',
+    on: 'onMode',
+    blink: 'blinkMode',
+    toggle: 'toggleMode'
+  };
+  return text[language][keyByMode[mode]] || mode;
+}
 
 const usbStatusText = {
   'Not connected': { en: 'Not connected', zh: '未連線' },
@@ -162,7 +202,17 @@ function loadCommandActions() {
         labels.en = item.label;
       }
 
-      return { ...fallback, labels, command: item.command };
+      const sourcePattern = item.pattern && typeof item.pattern === 'object' ? item.pattern : fallback.pattern;
+      const pattern = {
+        ...fallback.pattern,
+        green: lightModeChoices.includes(sourcePattern.green) ? sourcePattern.green : fallback.pattern.green,
+        red: lightModeChoices.includes(sourcePattern.red) ? sourcePattern.red : fallback.pattern.red,
+        flash: lightModeChoices.includes(sourcePattern.flash) ? sourcePattern.flash : fallback.pattern.flash,
+        intervalMs: Math.min(2000, Math.max(50, Number(sourcePattern.intervalMs) || fallback.pattern.intervalMs)),
+        count: Math.min(20, Math.max(1, Number(sourcePattern.count) || fallback.pattern.count))
+      };
+
+      return { ...fallback, labels, command: item.command, pattern };
     });
   } catch {
     return defaultCommandActions;
@@ -182,6 +232,16 @@ function clampHour(value) {
 function clampMinute(value) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(59, Math.max(0, Math.round(value)));
+}
+
+function clampInterval(value) {
+  if (!Number.isFinite(value)) return 180;
+  return Math.min(2000, Math.max(50, Math.round(value)));
+}
+
+function clampCount(value) {
+  if (!Number.isFinite(value)) return 3;
+  return Math.min(20, Math.max(1, Math.round(value)));
 }
 
 function toJson(config) {
@@ -207,6 +267,15 @@ function formatTime(config) {
   return `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 }
 
+function parseUsbJsonReply(reply, marker) {
+  const line = reply
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(marker));
+  if (!line) return null;
+  return JSON.parse(line.slice(marker.length).trim());
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -215,6 +284,7 @@ export default function App() {
   const [language, setLanguage] = useState(loadLanguage);
   const [config, setConfig] = useState(defaultConfig);
   const [commandActions, setCommandActions] = useState(loadCommandActions);
+  const [selectedActionId, setSelectedActionId] = useState(defaultCommandActions[0].id);
   const [usbState, setUsbState] = useState({
     connected: false,
     supported: typeof navigator !== 'undefined' && 'serial' in navigator,
@@ -226,6 +296,7 @@ export default function App() {
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
   const t = text[language];
+  const selectedAction = commandActions.find((action) => action.id === selectedActionId) || commandActions[0];
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -236,7 +307,9 @@ export default function App() {
     if (!usbState.connected) return undefined;
 
     const intervalId = window.setInterval(() => {
-      syncUsbTime({ quiet: true }).catch(() => {});
+      syncUsbTime({ quiet: true })
+        .then(() => loadUsbConfig())
+        .catch(() => {});
     }, 60 * 60 * 1000);
 
     return () => window.clearInterval(intervalId);
@@ -339,6 +412,7 @@ export default function App() {
 
       if (connected) {
         await syncUsbTime();
+        await loadUsbConfig();
       }
     } catch (error) {
       setUsbState((current) => ({
@@ -356,10 +430,31 @@ export default function App() {
     );
   }
 
+  function updateCommandPattern(id, patch) {
+    setCommandActions((current) =>
+      current.map((action) =>
+        action.id === id
+          ? { ...action, pattern: { ...action.pattern, ...patch } }
+          : action
+      )
+    );
+  }
+
   async function sendUsbCommand(action) {
     try {
+      setSelectedActionId(action.id);
       await applyUsbConfig({ quiet: true });
-      await writeUsbLine(`${action.command} ${config.hapticEffect}`);
+      const body = {
+        command: action.command,
+        green: action.pattern.green,
+        red: action.pattern.red,
+        flash: action.pattern.flash,
+        intervalMs: action.pattern.intervalMs,
+        count: action.pattern.count,
+        hapticEffect: config.hapticEffect
+      };
+      await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
+      await readUsbReply('usb_pattern_', body.intervalMs * body.count + 2500);
       setUsbState((current) => ({
         ...current,
         label: 'Sent'
@@ -393,6 +488,36 @@ export default function App() {
         detail: error.message
       }));
       throw error;
+    }
+  }
+
+  async function loadUsbConfig() {
+    try {
+      await writeUsbLine('get_config');
+      const reply = await readUsbReply('usb_config_json ', 1800);
+      const body = parseUsbJsonReply(reply, 'usb_config_json ');
+      if (!body) return;
+
+      setConfig((current) => ({
+        ...current,
+        enabled: Boolean(body.enabled),
+        hour: clampHour(Number(body.hour)),
+        minute: clampMinute(Number(body.minute)),
+        repeatMask: Math.min(127, Math.max(0, Number(body.repeatMask) || 0)),
+        prealertSec: clampZeroToTen(Number(body.prealertSec)),
+        snoozeMin: clampZeroToTen(Number(body.snoozeMin)),
+        maxRingSec: clampZeroToTen(Number(body.maxRingSec)),
+        hapticEffect: clampZeroToTen(Number(body.hapticEffect)),
+        ledPairBrightness: clampZeroToTen(Number(body.ledPairBrightness)),
+        flashLedBrightness: clampZeroToTen(Number(body.flashLedBrightness)),
+        version: Number(body.version) || current.version
+      }));
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        label: 'Connected',
+        detail: error.message
+      }));
     }
   }
 
@@ -550,7 +675,13 @@ export default function App() {
                       type="button"
                       onClick={() => sendUsbCommand(action)}
                       disabled={!usbState.connected}
-                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${usbState.connected ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500' : 'border-stone-200 bg-stone-100 text-stone-400'}`}
+                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${
+                        selectedActionId === action.id && usbState.connected
+                          ? 'border-teal-700 bg-teal-700 text-white'
+                          : usbState.connected
+                            ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
+                            : 'border-stone-200 bg-stone-100 text-stone-400'
+                      }`}
                     >
                       {action.labels[language]}
                     </button>
@@ -566,6 +697,7 @@ export default function App() {
                       <input
                         type="text"
                         value={action.labels[language]}
+                        onFocus={() => setSelectedActionId(action.id)}
                         onChange={(event) =>
                           updateCommandAction(action.id, {
                             labels: { ...action.labels, [language]: event.target.value }
@@ -575,6 +707,7 @@ export default function App() {
                       />
                       <select
                         value={action.command}
+                        onFocus={() => setSelectedActionId(action.id)}
                         onChange={(event) => updateCommandAction(action.id, { command: event.target.value })}
                         className="h-10 min-w-0 rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
                       >
@@ -586,6 +719,31 @@ export default function App() {
                       </select>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-stone-300 bg-white p-4">
+                <FieldLabel>{t.commandPattern}: {selectedAction.labels[language]}</FieldLabel>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <PatternSelect label={t.greenLed} value={selectedAction.pattern.green} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { green: value })} />
+                  <PatternSelect label={t.redLed} value={selectedAction.pattern.red} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { red: value })} />
+                  <PatternSelect label={t.flashLedShort} value={selectedAction.pattern.flash} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { flash: value })} />
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <NumberField
+                    label={`${t.interval} ms`}
+                    min={50}
+                    max={2000}
+                    value={selectedAction.pattern.intervalMs}
+                    onChange={(value) => updateCommandPattern(selectedAction.id, { intervalMs: clampInterval(value) })}
+                  />
+                  <NumberField
+                    label={t.count}
+                    min={1}
+                    max={20}
+                    value={selectedAction.pattern.count}
+                    onChange={(value) => updateCommandPattern(selectedAction.id, { count: clampCount(value) })}
+                  />
                 </div>
               </div>
 
@@ -683,6 +841,41 @@ function NumberCell({ value, min, max, ariaLabel, onChange }) {
       onBlur={(event) => onChange(Number(event.target.value))}
       className="h-11 w-full min-w-0 rounded border-0 bg-transparent px-1 text-center text-2xl font-semibold leading-none tabular-nums outline-none"
     />
+  );
+}
+
+function PatternSelect({ label, value, language, onChange }) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
+      >
+        {lightModeChoices.map((mode) => (
+          <option key={mode} value={mode}>
+            {modeLabel(mode, language)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function NumberField({ label, min, max, value, onChange }) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+      />
+    </label>
   );
 }
 

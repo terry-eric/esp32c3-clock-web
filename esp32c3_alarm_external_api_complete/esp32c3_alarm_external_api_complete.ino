@@ -41,7 +41,9 @@
   USB serial commands at 115200:
 
     set_time 1780702200
+    get_config
     set_config {"enabled":true,"hour":7,"minute":30,...}
+    run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","intervalMs":180,"count":3}
     usb_keepalive
     codex_busy
     codex_idle
@@ -187,6 +189,8 @@ bool codexBusyLight = false;
 bool codexDoneLight = false;
 
 bool isAllowedLocalCommand(const String& command);
+void stopAlarm();
+void snoozeAlarm();
 
 // Button debounce
 bool stableButtonNow = false;
@@ -313,6 +317,18 @@ void previewLedBrightness() {
   writeLedFlash(true);
   delay(220);
   allLedOff();
+}
+
+void writePatternLight(const String& mode, bool phase, void (*writer)(bool)) {
+  if (mode == "on") {
+    writer(true);
+  } else if (mode == "blink") {
+    writer(phase);
+  } else if (mode == "toggle") {
+    writer(phase);
+  } else {
+    writer(false);
+  }
 }
 
 void playHaptic(uint8_t effect) {
@@ -574,6 +590,77 @@ void clearCodexLight() {
   codexDoneLight = false;
 }
 
+void sendUsbConfigSnapshot() {
+  StaticJsonDocument<512> doc;
+  doc["enabled"] = alarmConfig.enabled;
+  doc["hour"] = alarmConfig.hour;
+  doc["minute"] = alarmConfig.minute;
+  doc["repeatMask"] = alarmConfig.repeatMask;
+  doc["prealertSec"] = alarmConfig.prealertSec;
+  doc["snoozeMin"] = alarmConfig.snoozeMin;
+  doc["maxRingSec"] = alarmConfig.maxRingSec;
+  doc["hapticEffect"] = alarmConfig.hapticEffect;
+  doc["ledPairBrightness"] = alarmConfig.ledPairBrightness;
+  doc["flashLedBrightness"] = alarmConfig.flashLedBrightness;
+  doc["version"] = alarmConfig.version;
+  doc["timeOk"] = timeOK;
+
+  Serial.print("usb_config_json ");
+  serializeJson(doc, Serial);
+  Serial.println();
+}
+
+void applyCommandStatus(String command, int effectFromCommand) {
+  command.trim();
+
+  if (command == "codex_busy") {
+    setCodexBusyLight();
+  } else if (command == "codex_idle") {
+    clearCodexLight();
+  } else if (command == "notify_done") {
+    codexBusyLight = false;
+    codexDoneLight = true;
+    lastAction = "VIBE_CODE_DONE";
+  } else if (command == "test_haptic") {
+    lastAction = "TEST_HAPTIC";
+    int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
+    playHaptic((uint8_t)effect);
+  } else if (command == "stop_alarm") {
+    stopAlarm();
+  } else if (command == "snooze") {
+    snoozeAlarm();
+  } else if (command == "test_led") {
+    lastAction = "TEST_LED";
+  }
+}
+
+void runPatternCommand(JsonVariantConst doc) {
+  String command = String(doc["command"] | "none");
+  String greenMode = String(doc["green"] | "off");
+  String redMode = String(doc["red"] | "off");
+  String flashMode = String(doc["flash"] | "off");
+  int intervalMs = constrain(doc["intervalMs"] | 180, 50, 2000);
+  int count = constrain(doc["count"] | 3, 1, 20);
+  int effect = constrain(doc["hapticEffect"] | alarmConfig.hapticEffect, 0, 10);
+
+  Serial.print("[CMD] run_pattern ");
+  Serial.println(command);
+
+  for (int i = 0; i < count; i++) {
+    bool phase = (i % 2) == 0;
+    writePatternLight(greenMode, phase, writeStatusGreen);
+    writePatternLight(redMode, phase, writeStatusRed);
+    writePatternLight(flashMode, phase, writeLedFlash);
+    if ((command == "notify_done" || command == "test_haptic") && effect > 0) {
+      playHaptic((uint8_t)effect);
+    }
+    delay((unsigned long)intervalMs);
+  }
+
+  allLedOff();
+  applyCommandStatus(command, effect);
+}
+
 void stopAlarm() {
   allLedOff();
   if (drvOK) drv.stop();
@@ -760,6 +847,11 @@ void handleUsbCommandLine(String line) {
     return;
   }
 
+  if (command == "get_config") {
+    sendUsbConfigSnapshot();
+    return;
+  }
+
   if (command == "set_time") {
     String epochText = separatorIndex > 0 ? line.substring(separatorIndex + 1) : "";
     epochText.trim();
@@ -770,6 +862,23 @@ void handleUsbCommandLine(String line) {
     } else {
       Serial.println("usb_time_rejected");
     }
+    return;
+  }
+
+  if (command == "run_pattern") {
+    String jsonText = separatorIndex > 0 ? line.substring(separatorIndex + 1) : "";
+    jsonText.trim();
+
+    StaticJsonDocument<512> doc;
+    DeserializationError err = deserializeJson(doc, jsonText);
+    if (err) {
+      Serial.print("[USB] Pattern JSON parse error: ");
+      Serial.println(err.c_str());
+      return;
+    }
+
+    runPatternCommand(doc.as<JsonVariantConst>());
+    Serial.println("usb_pattern_ok");
     return;
   }
 
