@@ -8,12 +8,19 @@
 
 #define ALARM_DEVICE_ID "alarm_c3_001"
 
-// No backend is required. Cloud sync is disabled by default.
-// Keep these placeholders only if you later add your own private API server.
+// No backend is required. The MCU fetches this public signed JSON file.
+#define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"
+#define ALARM_ENABLE_CLOUD_SYNC true
+
+// Keep the real signing secret in arduino_secrets.h only.
+// The same secret is used by scripts/sign-config.mjs on your own computer.
+#define ALARM_CONFIG_HMAC_SECRET "replace-with-private-signing-secret"
+#define ALARM_REQUIRE_CONFIG_SIGNATURE true
+
+// Legacy/private API placeholders. Not used by the signed static JSON flow.
 #define ALARM_CONFIG_URL_BASE "https://example.invalid/api/clock"
 #define ALARM_STATUS_URL "https://example.invalid/api/state"
 #define ALARM_SYNC_URL "https://example.invalid/api/sync"
-#define ALARM_ENABLE_CLOUD_SYNC false
 
 #define ALARM_ENABLE_LOCAL_API true
 // Leave commented to reuse ALARM_API_TOKEN, or set a different local-only key.

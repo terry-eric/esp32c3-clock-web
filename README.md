@@ -1,35 +1,76 @@
 # ESP32-C3 Clock Web
 
-ESP32-C3 鬧鐘控制專案，現在採用 **無後端** 架構：
+無後端 ESP32-C3 鬧鐘控制專案。Cloudflare Pages 只放靜態網站和靜態 JSON；MCU 定期抓公開 JSON，並用 HMAC-SHA256 驗證簽章，通過才套用設定。
 
-- Cloudflare Pages 只部署 React 靜態前端
-- 前端直接連到 ESP32-C3 的本機 API：`http://<MCU-IP>/api/local/*`
-- WiFi SSID、WiFi 密碼、Local API Token 只放在 `arduino_secrets.h`
-- `arduino_secrets.h` 已被 `.gitignore` 忽略，不會推上 GitHub
+```mermaid
+flowchart LR
+  A["你本機產生 JSON"] --> B["本機 secret key 簽章"]
+  B --> C["GitHub / Cloudflare Pages public JSON"]
+  D["ESP32-C3"] --> C
+  D --> E["用 arduino_secrets.h 的 secret 驗章"]
+  E --> F["通過才套用設定或命令"]
+```
 
-## Project Layout
+## What Is Public
+
+公開網站和 JSON 內容大家都看得到，這是靜態網站的特性。安全重點是：
+
+- JSON 可以公開
+- `signature` 可以公開
+- secret key 不可以公開
+- MCU 只接受 secret key 算得出來的 signature
+
+## Files
 
 ```text
-src/                                      React static web UI
-esp32c3_alarm_external_api_complete/      ESP32-C3 Arduino firmware
+src/                                      Signed config helper UI
+public/devices/alarm_c3_001.json          Public signed config example
+scripts/sign-config.mjs                   Local HMAC signing tool
+esp32c3_alarm_external_api_complete/      ESP32-C3 firmware
 esp32c3_alarm_external_api_complete/
-  arduino_secrets.example.h               public placeholder example
-docs/                                     setup and MCU notes
-wrangler.toml                             Cloudflare Pages static config
+  arduino_secrets.example.h               Public placeholder example
+  arduino_secrets.h                       Local secrets, ignored by git
 ```
 
-There is no backend in this repo. The old Cloudflare Pages Functions API was removed.
+## Setup
 
-## Web Setup
+Copy the secrets example:
 
-Install and build:
-
-```bash
-npm install
-npm run build
+```powershell
+copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm_external_api_complete\arduino_secrets.h
 ```
 
-Cloudflare Pages settings:
+Edit only `arduino_secrets.h`:
+
+```cpp
+#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
+#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
+#define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"
+#define ALARM_ENABLE_CLOUD_SYNC true
+#define ALARM_CONFIG_HMAC_SECRET "your-private-signing-secret"
+#define ALARM_REQUIRE_CONFIG_SIGNATURE true
+```
+
+Do not commit `arduino_secrets.h`.
+
+## Sign Config
+
+Edit:
+
+```text
+public/devices/alarm_c3_001.json
+```
+
+Then sign it locally:
+
+```powershell
+$env:ALARM_CONFIG_HMAC_SECRET="your-private-signing-secret"
+npm run sign:config
+```
+
+Then push to GitHub. Cloudflare Pages will redeploy the static JSON. The MCU will fetch it on its next sync interval.
+
+## Cloudflare Pages
 
 ```text
 Framework preset: None
@@ -37,60 +78,4 @@ Build command: npm run build
 Build output directory: dist
 ```
 
-After deploy, open the site and fill:
-
-```text
-MCU Base URL: http://<MCU-IP>
-Local API Token: blank, unless you set ALARM_LOCAL_API_TOKEN
-Device ID: alarm_c3_001
-```
-
-Important browser note: a Cloudflare site is HTTPS. Some browsers block HTTPS pages from calling `http://192.168.x.x`. If that happens, open the MCU local website directly:
-
-```text
-http://<MCU-IP>/
-```
-
-or run the web UI locally with:
-
-```bash
-npm run dev
-```
-
-## MCU Secrets
-
-Copy the example file before flashing:
-
-```powershell
-copy esp32c3_alarm_external_api_complete\arduino_secrets.example.h esp32c3_alarm_external_api_complete\arduino_secrets.h
-```
-
-Then edit only `arduino_secrets.h`:
-
-```cpp
-#define ALARM_WIFI_SSID "YOUR_WIFI_SSID"
-#define ALARM_WIFI_PASS "YOUR_WIFI_PASSWORD"
-#define ALARM_ENABLE_CLOUD_SYNC false
-#define ALARM_ENABLE_LOCAL_API true
-// #define ALARM_LOCAL_API_TOKEN "local-only-token"
-```
-
-Do not commit `arduino_secrets.h`.
-
-## MCU Local API
-
-The web UI calls:
-
-```text
-GET  /api/local/status
-POST /api/local/config
-POST /api/local/command
-```
-
-When the MCU is online, Serial Monitor prints:
-
-```text
-[LocalAPI] Listening at http://192.168.x.x/
-```
-
-Use that IP in the web UI.
+No Functions, KV, database, or backend API is required.

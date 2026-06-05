@@ -1,56 +1,58 @@
-# Local MCU API
+# Signed Static Config
 
-The project uses only the ESP32-C3 local API. There is no Cloudflare backend API in this repo.
-
-Base URL:
+There is no backend API. The MCU fetches one public JSON file:
 
 ```text
-http://<MCU-IP>/api/local
+GET https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json
 ```
 
-If `ALARM_LOCAL_API_TOKEN` is set in `arduino_secrets.h`, requests must include:
+Example:
+
+```json
+{
+  "deviceId": "alarm_c3_001",
+  "enabled": true,
+  "hour": 7,
+  "minute": 30,
+  "repeatMask": 62,
+  "prealertSec": 60,
+  "snoozeMin": 5,
+  "maxRingSec": 300,
+  "hapticEffect": 17,
+  "version": 1,
+  "commandId": 0,
+  "command": "none",
+  "signature": "..."
+}
+```
+
+## Signed Payload
+
+The signature is HMAC-SHA256 over this exact payload:
 
 ```text
-X-Local-Token: <local-only-token>
+deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version|commandId|command
 ```
 
-## GET `/status`
+`enabled` is encoded as `1` or `0`.
 
-Returns current status and config.
-
-```bash
-curl -H "X-Local-Token: <token-if-enabled>" \
-  "http://192.168.x.x/api/local/status?device_id=alarm_c3_001"
-```
-
-## POST `/config`
-
-Updates alarm config.
-
-```bash
-curl -X POST "http://192.168.x.x/api/local/config" \
-  -H "Content-Type: application/json" \
-  -H "X-Local-Token: <token-if-enabled>" \
-  -d '{"deviceId":"alarm_c3_001","enabled":true,"hour":7,"minute":30,"repeatMask":62,"prealertSec":60,"snoozeMin":5,"maxRingSec":300,"hapticEffect":17}'
-```
-
-## POST `/command`
-
-Sends a command.
-
-```bash
-curl -X POST "http://192.168.x.x/api/local/command" \
-  -H "Content-Type: application/json" \
-  -H "X-Local-Token: <token-if-enabled>" \
-  -d '{"deviceId":"alarm_c3_001","command":"test_haptic","hapticEffect":17}'
-```
-
-Supported commands:
+For the example above:
 
 ```text
+alarm_c3_001|1|7|30|62|60|5|300|17|1|0|none
+```
+
+## Commands
+
+Supported command values:
+
+```text
+none
 test_led
 test_haptic
 start_alarm
 stop_alarm
 snooze
 ```
+
+Increase `commandId` whenever `command` is not `none`. The MCU executes each command ID once.

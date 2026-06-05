@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 const defaultConfig = {
   deviceId: 'alarm_c3_001',
@@ -15,26 +15,8 @@ const defaultConfig = {
   command: 'none'
 };
 
-const defaultStatus = {
-  deviceId: 'alarm_c3_001',
-  online: false,
-  state: 'OFFLINE',
-  wifiOk: false,
-  wifiRssi: 0,
-  ip: '',
-  timeOk: false,
-  time: '',
-  drvOk: false,
-  alarmEnabled: false,
-  alarmTime: '00:00',
-  repeatMask: 0,
-  lastAction: 'NONE',
-  configVersion: 0,
-  lastCommandId: 0,
-  heap: 0
-};
-
-const commands = [
+const commandOptions = [
+  ['none', '無命令'],
   ['test_led', '測試 LED'],
   ['test_haptic', '測試震動'],
   ['start_alarm', '開始鬧鐘'],
@@ -52,214 +34,73 @@ const days = [
   ['六', 6]
 ];
 
-function cleanUrl(url) {
-  const trimmed = url.trim();
-  if (!trimmed) return '';
-  return trimmed.replace(/\/+$/, '');
-}
-
-function readSetting(key, fallback) {
-  if (typeof window === 'undefined') return fallback;
-  return window.localStorage.getItem(key) || fallback;
-}
-
-function statusColor(status) {
-  if (!status.online) return 'bg-rose-500';
-  if (!status.wifiOk || !status.timeOk || !status.drvOk) return 'bg-amber-400';
-  return 'bg-emerald-400';
-}
-
-function buildPrompt(deviceId, mcuBase) {
+function signedPayload(config) {
   return [
-    '請幫我設定 ESP32-C3 鬧鐘專案使用無後端直連模式。',
-    `Device ID: ${deviceId}`,
-    `MCU Base URL: ${mcuBase || 'http://<MCU-IP>'}`,
-    'Cloudflare 只部署靜態前端，不使用 Pages Functions、KV 或 DEVICE_TOKEN。',
-    'Web 端直接呼叫 MCU 的 /api/local/status、/api/local/config、/api/local/command。',
-    'WiFi SSID、WiFi 密碼、Local API Token 只放在 MCU 的 arduino_secrets.h，這個檔案不能 commit。',
-    '如果瀏覽器擋 HTTPS 網站呼叫 http://192.168.x.x，請改開 MCU 本機網站 http://<MCU-IP>/，或在本機用 npm run dev 開發頁面。'
-  ].join('\n');
+    config.deviceId,
+    config.enabled ? '1' : '0',
+    config.hour,
+    config.minute,
+    config.repeatMask,
+    config.prealertSec,
+    config.snoozeMin,
+    config.maxRingSec,
+    config.hapticEffect,
+    config.version,
+    config.commandId,
+    config.command
+  ].join('|');
+}
+
+function toJson(config) {
+  return JSON.stringify({ ...config, signature: '<run sign-config.mjs>' }, null, 2);
 }
 
 export default function App() {
-  const [mcuBaseUrl, setMcuBaseUrl] = useState(() => readSetting('mcuBaseUrl', ''));
-  const [localToken, setLocalToken] = useState(() => readSetting('localToken', ''));
-  const [deviceId, setDeviceId] = useState(() => readSetting('deviceId', 'alarm_c3_001'));
   const [config, setConfig] = useState(defaultConfig);
-  const [status, setStatus] = useState(defaultStatus);
-  const [logs, setLogs] = useState([]);
-  const [busy, setBusy] = useState(false);
 
-  const mcuBase = useMemo(() => cleanUrl(mcuBaseUrl), [mcuBaseUrl]);
-  const localApiBase = useMemo(() => (mcuBase ? `${mcuBase}/api/local` : ''), [mcuBase]);
-  const prompt = useMemo(() => buildPrompt(deviceId, mcuBase), [deviceId, mcuBase]);
-
-  const endpoints = useMemo(
-    () => ({
-      status: localApiBase ? `${localApiBase}/status?device_id=${encodeURIComponent(deviceId)}` : '',
-      config: localApiBase ? `${localApiBase}/config` : '',
-      command: localApiBase ? `${localApiBase}/command` : ''
-    }),
-    [localApiBase, deviceId]
-  );
-
-  useEffect(() => {
-    window.localStorage.setItem('mcuBaseUrl', mcuBaseUrl);
-    window.localStorage.setItem('localToken', localToken);
-    window.localStorage.setItem('deviceId', deviceId);
-  }, [mcuBaseUrl, localToken, deviceId]);
-
-  function requestHeaders() {
-    const headers = { 'Content-Type': 'application/json' };
-    if (localToken.trim()) {
-      headers['X-Local-Token'] = localToken.trim();
-    }
-    return headers;
-  }
-
-  function addLog(type, message, data) {
-    setLogs((items) => [
-      {
-        id: `${Date.now()}-${Math.random()}`,
-        time: new Date().toLocaleTimeString(),
-        type,
-        message,
-        data
-      },
-      ...items.slice(0, 24)
-    ]);
-  }
-
-  function requireMcuUrl() {
-    if (mcuBase) return true;
-    addLog('INFO', '請先填 MCU Base URL，例如 http://192.168.1.23。');
-    return false;
-  }
-
-  async function refreshStatus() {
-    if (!requireMcuUrl()) return;
-
-    setBusy(true);
-    try {
-      const response = await fetch(endpoints.status, { headers: requestHeaders() });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      setConfig({ ...defaultConfig, ...(data.config || {}) });
-      setStatus({ ...defaultStatus, ...(data.status || {}) });
-      addLog('GET', '已讀取 MCU 狀態', data);
-    } catch (error) {
-      addLog('ERR', `讀取失敗：${error.message}`);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function updateConfig(patch) {
-    if (!requireMcuUrl()) return;
-
-    const next = { ...config, ...patch, deviceId };
-    setConfig(next);
-
-    try {
-      const response = await fetch(endpoints.config, {
-        method: 'POST',
-        headers: requestHeaders(),
-        body: JSON.stringify(next)
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      setConfig({ ...defaultConfig, ...(data.config || next) });
-      addLog('POST', '設定已送到 MCU', next);
-    } catch (error) {
-      addLog('ERR', `設定失敗：${error.message}`);
-    }
-  }
-
-  async function sendCommand(command) {
-    if (!requireMcuUrl()) return;
-
-    try {
-      const response = await fetch(endpoints.command, {
-        method: 'POST',
-        headers: requestHeaders(),
-        body: JSON.stringify({ deviceId, command, hapticEffect: config.hapticEffect })
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const data = await response.json();
-      setConfig({ ...defaultConfig, ...(data.config || config) });
-      addLog('CMD', `命令已送出：${command}`, data);
-    } catch (error) {
-      addLog('ERR', `命令失敗：${error.message}`);
-    }
-  }
-
-  async function copyPrompt() {
-    try {
-      await window.navigator.clipboard.writeText(prompt);
-      addLog('COPY', '已複製 Vibe Coding 提示器');
-    } catch (error) {
-      addLog('ERR', `複製失敗：${error.message}`);
-    }
-  }
-
-  useEffect(() => {
-    if (!mcuBase) return undefined;
-    refreshStatus();
-    const timer = window.setInterval(refreshStatus, 15000);
-    return () => window.clearInterval(timer);
-  }, [endpoints.status, localToken]);
-
+  const publicPath = useMemo(() => `/devices/${config.deviceId}.json`, [config.deviceId]);
+  const payload = useMemo(() => signedPayload(config), [config]);
+  const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
+
+  function update(patch) {
+    setConfig((current) => ({ ...current, ...patch }));
+  }
+
+  function bumpVersion(patch = {}) {
+    setConfig((current) => ({
+      ...current,
+      ...patch,
+      version: current.version + 1
+    }));
+  }
+
+  function setCommand(command) {
+    setConfig((current) => ({
+      ...current,
+      command,
+      commandId: command === 'none' ? current.commandId : current.commandId + 1,
+      version: current.version + 1
+    }));
+  }
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100">
       <section className="border-b border-neutral-800 bg-neutral-900">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold">ESP32-C3 Alarm Hub</h1>
-            <p className="mt-1 text-sm text-neutral-400">純前端直連 MCU，本專案不包含後端服務或公開 API key。</p>
-          </div>
-          <button
-            type="button"
-            onClick={refreshStatus}
-            className="h-10 rounded border border-neutral-700 bg-neutral-800 px-4 text-sm font-medium hover:bg-neutral-700"
-          >
-            {busy ? '讀取中' : '重新整理'}
-          </button>
+        <div className="mx-auto max-w-6xl px-4 py-5">
+          <h1 className="text-xl font-semibold">ESP32-C3 Signed Config</h1>
+          <p className="mt-1 text-sm text-neutral-400">
+            無後端模式：MCU 抓公開 JSON，但只接受 HMAC 簽章正確的設定。
+          </p>
         </div>
       </section>
 
-      <div className="mx-auto grid max-w-6xl gap-5 px-4 py-5 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="mx-auto grid max-w-6xl gap-5 px-4 py-5 lg:grid-cols-[1fr_1fr]">
         <section className="space-y-5">
-          <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm text-neutral-400">裝置狀態</p>
-                <div className="mt-2 flex items-center gap-3">
-                  <span className={`h-3 w-3 rounded-full ${statusColor(status)}`} />
-                  <span className="text-3xl font-semibold">{status.state}</span>
-                </div>
-              </div>
-              <div className="text-right text-sm text-neutral-400">
-                <p>{status.deviceId || deviceId}</p>
-                <p>{status.time || '尚未同步時間'}</p>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 sm:grid-cols-4">
-              <Info label="Wi-Fi" value={status.wifiOk ? `${status.wifiRssi} dBm` : '離線'} />
-              <Info label="IP" value={status.ip || '-'} />
-              <Info label="DRV2605L" value={status.drvOk ? 'OK' : '未就緒'} />
-              <Info label="Heap" value={status.heap ? `${status.heap}` : '-'} />
-            </div>
-          </div>
-
-          <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">鬧鐘設定</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Panel title="設定內容">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField label="Device ID" value={config.deviceId} onChange={(value) => update({ deviceId: value })} />
+              <NumberField label="Version" value={config.version} onChange={(value) => update({ version: value })} min={1} />
               <label className="text-sm">
                 <span className="mb-1 block text-neutral-400">時間</span>
                 <input
@@ -267,24 +108,15 @@ export default function App() {
                   value={alarmTime}
                   onChange={(event) => {
                     const [hour, minute] = event.target.value.split(':').map(Number);
-                    updateConfig({ hour, minute });
+                    bumpVersion({ hour, minute });
                   }}
                   className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
                 />
               </label>
-              <label className="text-sm">
-                <span className="mb-1 block text-neutral-400">震動效果</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="123"
-                  value={config.hapticEffect}
-                  onChange={(event) => updateConfig({ hapticEffect: Number(event.target.value) })}
-                  className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
-                />
-              </label>
-              <NumberField label="預提醒秒數" value={config.prealertSec} onChange={(value) => updateConfig({ prealertSec: value })} />
-              <NumberField label="貪睡分鐘" value={config.snoozeMin} onChange={(value) => updateConfig({ snoozeMin: value })} />
+              <NumberField label="震動效果" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: value })} min={1} max={123} />
+              <NumberField label="預提醒秒數" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: value })} min={0} />
+              <NumberField label="貪睡分鐘" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: value })} min={1} />
+              <NumberField label="最長響鈴秒數" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: value })} min={10} />
             </div>
 
             <div className="mt-4">
@@ -296,7 +128,7 @@ export default function App() {
                     <button
                       key={bit}
                       type="button"
-                      onClick={() => updateConfig({ repeatMask: config.repeatMask ^ (1 << bit) })}
+                      onClick={() => bumpVersion({ repeatMask: config.repeatMask ^ (1 << bit) })}
                       className={`h-10 rounded border text-sm font-medium ${
                         selected
                           ? 'border-cyan-500 bg-cyan-500 text-neutral-950'
@@ -314,7 +146,7 @@ export default function App() {
               <span className="text-sm text-neutral-400">啟用鬧鐘</span>
               <button
                 type="button"
-                onClick={() => updateConfig({ enabled: !config.enabled })}
+                onClick={() => bumpVersion({ enabled: !config.enabled })}
                 className={`h-10 rounded px-4 text-sm font-semibold ${
                   config.enabled ? 'bg-emerald-500 text-neutral-950' : 'bg-neutral-800 text-neutral-300'
                 }`}
@@ -322,115 +154,83 @@ export default function App() {
                 {config.enabled ? '已啟用' : '已關閉'}
               </button>
             </div>
-          </div>
+          </Panel>
 
-          <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">快速命令</h2>
-            <div className="mt-4 grid gap-2 sm:grid-cols-5">
-              {commands.map(([command, label]) => (
+          <Panel title="一次性命令">
+            <div className="grid gap-2 sm:grid-cols-3">
+              {commandOptions.map(([value, label]) => (
                 <button
-                  key={command}
+                  key={value}
                   type="button"
-                  onClick={() => sendCommand(command)}
-                  className="h-11 rounded border border-neutral-700 bg-neutral-950 px-3 text-sm font-medium hover:bg-neutral-800"
+                  onClick={() => setCommand(value)}
+                  className={`h-11 rounded border px-3 text-sm font-medium ${
+                    config.command === value
+                      ? 'border-cyan-500 bg-cyan-500/10 text-cyan-200'
+                      : 'border-neutral-700 bg-neutral-950 text-neutral-300 hover:bg-neutral-800'
+                  }`}
                 >
                   {label}
                 </button>
               ))}
             </div>
-          </div>
+            <p className="mt-3 text-xs leading-5 text-neutral-400">
+              命令不是即時推送。你更新 JSON、簽章、push 後，MCU 下一次抓到新版本才會執行。
+            </p>
+          </Panel>
         </section>
 
         <aside className="space-y-5">
-          <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">MCU 連線</h2>
-            <div className="mt-4 space-y-3">
-              <TextField label="Device ID" value={deviceId} onChange={setDeviceId} />
-              <TextField label="MCU Base URL" value={mcuBaseUrl} onChange={setMcuBaseUrl} placeholder="例如 http://192.168.1.23" />
-              <TextField
-                label="Local API Token"
-                type="password"
-                value={localToken}
-                onChange={setLocalToken}
-                placeholder="留空代表 MCU 未啟用 token"
-              />
-            </div>
+          <Panel title="公開 JSON">
+            <p className="mb-3 text-sm text-neutral-400">
+              將內容放到 <span className="font-mono text-neutral-200">public{publicPath}</span>，再用本機 secret 簽章。
+            </p>
+            <pre className="max-h-[360px] overflow-auto rounded bg-neutral-950 p-3 text-xs text-neutral-200">{jsonText}</pre>
+          </Panel>
 
-            <div className="mt-4 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-100">
-              MCU 開機連上 Wi-Fi 後，從 Serial Monitor 找
-              <span className="font-mono"> [LocalAPI] Listening at http://192.168.x.x/ </span>
-              ，把那個 IP 填到 MCU Base URL。
+          <Panel title="簽章方式">
+            <p className="text-sm leading-6 text-neutral-400">
+              Secret key 不放網站、不放 JSON、不放 GitHub。只放在你的電腦環境變數和 MCU 的
+              <span className="font-mono text-neutral-200"> arduino_secrets.h</span>。
+            </p>
+            <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-200">
+              <p>$env:ALARM_CONFIG_HMAC_SECRET=&quot;你的私密 key&quot;</p>
+              <p>npm run sign:config</p>
             </div>
+            <div className="mt-4">
+              <p className="mb-1 text-sm text-neutral-400">MCU 驗章 payload</p>
+              <pre className="overflow-auto rounded bg-neutral-950 p-3 text-xs text-neutral-200">{payload}</pre>
+            </div>
+          </Panel>
 
-            <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-300">
-              <p>STATUS {endpoints.status || '-'}</p>
-              <p>CONFIG {endpoints.config || '-'}</p>
-              <p>COMMAND {endpoints.command || '-'}</p>
+          <Panel title="MCU 抓取路徑">
+            <div className="rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-200">
+              https://esp32c3-clock-web.pages.dev{publicPath}
             </div>
-          </div>
-
-          <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-base font-semibold">Vibe Coding 提示器</h2>
-              <button
-                type="button"
-                onClick={copyPrompt}
-                className="h-9 rounded border border-neutral-700 bg-neutral-950 px-3 text-xs font-medium hover:bg-neutral-800"
-              >
-                複製
-              </button>
-            </div>
-            <textarea
-              readOnly
-              value={prompt}
-              className="mt-4 min-h-44 w-full resize-y rounded border border-neutral-800 bg-neutral-950 p-3 font-mono text-xs text-neutral-200"
-            />
-          </div>
-
-          <div className="rounded border border-neutral-800 bg-neutral-900 p-5">
-            <h2 className="text-base font-semibold">操作紀錄</h2>
-            <div className="mt-4 max-h-[420px] space-y-2 overflow-y-auto">
-              {logs.length === 0 ? (
-                <p className="text-sm text-neutral-500">尚無紀錄</p>
-              ) : (
-                logs.map((log) => (
-                  <div key={log.id} className="rounded border border-neutral-800 bg-neutral-950 p-3 text-xs">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="font-semibold text-cyan-300">{log.type}</span>
-                      <span className="text-neutral-500">{log.time}</span>
-                    </div>
-                    <p className="mt-1 text-neutral-200">{log.message}</p>
-                    {log.data ? (
-                      <pre className="mt-2 max-h-40 overflow-auto rounded bg-neutral-900 p-2 text-neutral-400">
-                        {JSON.stringify(log.data, null, 2)}
-                      </pre>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+            <p className="mt-3 text-sm leading-6 text-neutral-400">
+              JSON 內容大家看得到，但沒有 secret key 的人無法產生正確 signature，所以 MCU 會拒絕被竄改的設定。
+            </p>
+          </Panel>
         </aside>
       </div>
     </main>
   );
 }
 
-function Info({ label, value }) {
+function Panel({ title, children }) {
   return (
-    <div className="rounded bg-neutral-950 p-3">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 truncate text-sm font-medium">{value}</p>
-    </div>
+    <section className="rounded border border-neutral-800 bg-neutral-900 p-5">
+      <h2 className="text-base font-semibold">{title}</h2>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }
 
-function TextField({ label, value, onChange, type = 'text', placeholder = '' }) {
+function TextField({ label, value, onChange, placeholder = '' }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block text-neutral-400">{label}</span>
       <input
-        type={type}
+        type="text"
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
@@ -440,13 +240,15 @@ function TextField({ label, value, onChange, type = 'text', placeholder = '' }) 
   );
 }
 
-function NumberField({ label, value, onChange }) {
+function NumberField({ label, value, onChange, min, max }) {
   return (
     <label className="text-sm">
       <span className="mb-1 block text-neutral-400">{label}</span>
       <input
         type="number"
         value={value}
+        min={min}
+        max={max}
         onChange={(event) => onChange(Number(event.target.value))}
         className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
       />

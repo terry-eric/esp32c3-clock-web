@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "sign:config": "node scripts/sign-config.mjs --input public/devices/alarm_c3_001.json",
     "test": "npm run build"
   },
   "dependencies": {

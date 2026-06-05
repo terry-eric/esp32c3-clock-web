@@ -1,36 +1,26 @@
 # GitHub Deploy Checklist
 
-## Public Files
-
 Safe to commit:
 
-- React source in `src/`
-- Firmware source `.ino`
+- `src/`
+- `public/devices/*.json`
+- `scripts/sign-config.mjs`
+- firmware source
+- docs
 - `arduino_secrets.example.h`
-- Docs
 
 Never commit:
 
-- `esp32c3_alarm_external_api_complete/arduino_secrets.h`
-- WiFi SSID/password
-- Local API token
-- Cloudflare account/deploy tokens
+- `arduino_secrets.h`
+- WiFi password
+- `ALARM_CONFIG_HMAC_SECRET`
 
-## Push
+Before pushing, sign JSON locally:
 
-```bash
-git add .
-git commit -m "Update static no-backend mode"
+```powershell
+$env:ALARM_CONFIG_HMAC_SECRET="your-private-signing-secret"
+npm run sign:config
+git add public/devices/alarm_c3_001.json
+git commit -m "Update signed alarm config"
 git push origin main
 ```
-
-## Cloudflare Pages
-
-Cloudflare only builds the static frontend:
-
-```text
-Build command: npm run build
-Build output directory: dist
-```
-
-No backend configuration is needed.

@@ -5,8 +5,9 @@ The ESP32-C3 firmware has four main jobs:
 - Maintain Wi-Fi with low-power retry behavior.
 - Keep local alarm config in NVS.
 - Run the alarm state machine and hardware outputs.
-- Serve local MCU Web/API endpoints for the static web UI.
-- Optionally call a private external API only if you enable it yourself.
+- Fetch public signed JSON from the static website.
+- Verify HMAC-SHA256 before applying config.
+- Serve local MCU Web/API endpoints as an optional fallback.
 
 ## Startup Flow
 
@@ -19,10 +20,13 @@ flowchart TD
   E --> F{"Wi-Fi connected?"}
   F -- "Yes" --> G["Start local MCU Web/API"]
   G --> H["Sync NTP time"]
-  H --> I{"External sync enabled?"}
-  I -- "Yes" --> J["Call private external API"]
+  H --> I{"Signed config sync enabled?"}
+  I -- "Yes" --> J["GET public signed JSON"]
   I -- "No" --> K["Stay local-only"]
-  J --> L{"Time OK and driver OK?"}
+  J --> Q{"Signature OK?"}
+  Q -- "Yes" --> R["Apply config / command"]
+  Q -- "No" --> K
+  R --> L{"Time OK and driver OK?"}
   K --> L
   F -- "No" --> M["Turn Wi-Fi radio off, wait retry backoff"]
   M --> N["Enter TIME_INVALID until time is available"]
@@ -48,8 +52,8 @@ flowchart TD
   F --> J["Read button"]
   J --> K["Update alarm state machine"]
   K --> L["Update LED pattern"]
-  L --> M{"External sync due?"}
-  M -- "Yes" --> N["Call private external API"]
+  L --> M{"Signed config sync due?"}
+  M -- "Yes" --> N["GET public signed JSON and verify HMAC"]
   M -- "No" --> O["Print heartbeat if due"]
   N --> O
   O --> P["delay 5 ms"]
@@ -117,4 +121,4 @@ If battery/power is more important than fast reconnect:
 
 - Increase `ALARM_WIFI_RETRY_INTERVAL_MS`.
 - Increase `ALARM_WIFI_RETRY_MAX_INTERVAL_MS`.
-- Keep `ALARM_ENABLE_CLOUD_SYNC false` and use local MCU mode only.
+- Increase `SYNC_INTERVAL_MS` in firmware if you want the MCU to fetch the signed JSON less often.

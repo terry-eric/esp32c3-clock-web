@@ -22,14 +22,17 @@
     Serial Monitor: 115200
 
   ------------------------------------------------------------
-  External website/API format
+  Signed static website config
   ------------------------------------------------------------
 
-  MCU will periodically call:
+  MCU periodically fetches a public static JSON file:
 
-    GET http://YOUR_SERVER/api/device/config?device_id=alarm_c3_001
+    GET https://YOUR_SITE/devices/alarm_c3_001.json
 
-  Expected JSON response:
+  The JSON is public, but the MCU only applies it when the HMAC-SHA256
+  signature matches ALARM_CONFIG_HMAC_SECRET from arduino_secrets.h.
+
+  Expected JSON:
 
     {
       "deviceId": "alarm_c3_001",
@@ -44,7 +47,8 @@
       "version": 12,
 
       "commandId": 0,
-      "command": "none"
+      "command": "none",
+      "signature": "..."
     }
 
   repeatMask:
@@ -71,30 +75,9 @@
   If command is not "none", commandId should increase every time.
   MCU only executes a command once when commandId is new.
 
-  MCU will periodically post status:
+  Signature payload:
 
-    POST http://YOUR_SERVER/api/device/status
-
-  JSON body example:
-
-    {
-      "deviceId": "alarm_c3_001",
-      "online": true,
-      "state": "IDLE",
-      "wifiOk": true,
-      "wifiRssi": -56,
-      "ip": "192.168.43.20",
-      "timeOk": true,
-      "time": "2026-06-03 15:03:23",
-      "drvOk": true,
-      "alarmEnabled": true,
-      "alarmTime": "07:30",
-      "repeatMask": 62,
-      "lastAction": "STOPPED",
-      "configVersion": 12,
-      "lastCommandId": 0,
-      "heap": 197812
-    }
+    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version|commandId|command
 */
 
 #include <WiFi.h>
@@ -106,6 +89,7 @@
 #include <Adafruit_DRV2605.h>
 #include <Preferences.h>
 #include <time.h>
+#include "mbedtls/md.h"
 
 #if __has_include("arduino_secrets.h")
 #include "arduino_secrets.h"
@@ -191,6 +175,22 @@ const char* DEVICE_ID = ALARM_DEVICE_ID;
 const char* CONFIG_URL_BASE = ALARM_CONFIG_URL_BASE;
 const char* STATUS_URL      = ALARM_STATUS_URL;
 const char* SYNC_URL        = ALARM_SYNC_URL;
+
+#ifndef ALARM_SIGNED_CONFIG_URL
+#define ALARM_SIGNED_CONFIG_URL "https://esp32c3-clock-web.pages.dev/devices/alarm_c3_001.json"
+#endif
+
+#ifndef ALARM_CONFIG_HMAC_SECRET
+#define ALARM_CONFIG_HMAC_SECRET ""
+#endif
+
+#ifndef ALARM_REQUIRE_CONFIG_SIGNATURE
+#define ALARM_REQUIRE_CONFIG_SIGNATURE true
+#endif
+
+const char* SIGNED_CONFIG_URL = ALARM_SIGNED_CONFIG_URL;
+const char* CONFIG_HMAC_SECRET = ALARM_CONFIG_HMAC_SECRET;
+const bool REQUIRE_CONFIG_SIGNATURE = ALARM_REQUIRE_CONFIG_SIGNATURE;
 
 #ifndef ALARM_ENABLE_CLOUD_SYNC
 #define ALARM_ENABLE_CLOUD_SYNC false
@@ -817,10 +817,129 @@ void addCommonHeaders(HTTPClient& http) {
 }
 
 String buildConfigUrl() {
+  if (strlen(SIGNED_CONFIG_URL) > 0) {
+    return String(SIGNED_CONFIG_URL);
+  }
+
   String url = String(CONFIG_URL_BASE);
   url += "?device_id=";
   url += DEVICE_ID;
   return url;
+}
+
+String boolForSignature(bool value) {
+  return value ? "1" : "0";
+}
+
+String signedConfigPayload(JsonVariantConst doc) {
+  const char* deviceId = doc["deviceId"] | "";
+  const char* command = doc["command"] | "none";
+
+  if (strlen(deviceId) == 0 ||
+      !doc["enabled"].is<bool>() ||
+      !doc["hour"].is<int>() ||
+      !doc["minute"].is<int>() ||
+      !doc["repeatMask"].is<int>() ||
+      !doc["prealertSec"].is<int>() ||
+      !doc["snoozeMin"].is<int>() ||
+      !doc["maxRingSec"].is<int>() ||
+      !doc["hapticEffect"].is<int>() ||
+      !doc["version"].is<int>() ||
+      !doc["commandId"].is<int>()) {
+    return "";
+  }
+
+  String payload = String(deviceId);
+  payload += "|";
+  payload += boolForSignature(doc["enabled"].as<bool>());
+  payload += "|";
+  payload += String(doc["hour"].as<int>());
+  payload += "|";
+  payload += String(doc["minute"].as<int>());
+  payload += "|";
+  payload += String(doc["repeatMask"].as<int>());
+  payload += "|";
+  payload += String(doc["prealertSec"].as<int>());
+  payload += "|";
+  payload += String(doc["snoozeMin"].as<int>());
+  payload += "|";
+  payload += String(doc["maxRingSec"].as<int>());
+  payload += "|";
+  payload += String(doc["hapticEffect"].as<int>());
+  payload += "|";
+  payload += String(doc["version"].as<int>());
+  payload += "|";
+  payload += String(doc["commandId"].as<int>());
+  payload += "|";
+  payload += String(command);
+  return payload;
+}
+
+String hmacSha256Hex(const char* secret, const String& payload) {
+  byte digest[32];
+  const mbedtls_md_info_t* mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+
+  if (mdInfo == nullptr) {
+    return "";
+  }
+
+  int result = mbedtls_md_hmac(
+    mdInfo,
+    reinterpret_cast<const unsigned char*>(secret),
+    strlen(secret),
+    reinterpret_cast<const unsigned char*>(payload.c_str()),
+    payload.length(),
+    digest
+  );
+
+  if (result != 0) {
+    return "";
+  }
+
+  const char hexChars[] = "0123456789abcdef";
+  String hex;
+  hex.reserve(64);
+
+  for (byte value : digest) {
+    hex += hexChars[(value >> 4) & 0x0F];
+    hex += hexChars[value & 0x0F];
+  }
+
+  return hex;
+}
+
+bool verifyConfigSignature(JsonVariantConst doc) {
+  if (!REQUIRE_CONFIG_SIGNATURE) {
+    return true;
+  }
+
+  if (strlen(CONFIG_HMAC_SECRET) == 0) {
+    Serial.println("[SIG] Missing ALARM_CONFIG_HMAC_SECRET, config rejected");
+    return false;
+  }
+
+  const char* signature = doc["signature"] | "";
+  if (strlen(signature) == 0) {
+    Serial.println("[SIG] Missing signature, config rejected");
+    return false;
+  }
+
+  String payload = signedConfigPayload(doc);
+  if (payload.length() == 0) {
+    Serial.println("[SIG] Missing signed fields, config rejected");
+    return false;
+  }
+
+  String expected = hmacSha256Hex(CONFIG_HMAC_SECRET, payload);
+  if (expected.length() == 0 || !expected.equalsIgnoreCase(String(signature))) {
+    Serial.println("[SIG] Signature mismatch, config rejected");
+    Serial.print("[SIG] Payload: ");
+    Serial.println(payload);
+    return false;
+  }
+
+  Serial.println("[SIG] Signature OK");
+  return true;
 }
 
 // ============================================================
@@ -918,6 +1037,10 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   }
 
   int incomingVersion = doc["version"] | alarmConfig.version;
+  if (incomingVersion < alarmConfig.version) {
+    Serial.println("[API] Older config version, ignored");
+    return false;
+  }
 
   alarmConfig.enabled = doc["enabled"] | alarmConfig.enabled;
   alarmConfig.hour = doc["hour"] | alarmConfig.hour;
@@ -998,6 +1121,10 @@ bool syncConfigFromServer() {
   if (err) {
     Serial.print("[API] JSON parse error: ");
     Serial.println(err.c_str());
+    return false;
+  }
+
+  if (!verifyConfigSignature(doc.as<JsonVariantConst>())) {
     return false;
   }
 
@@ -1771,7 +1898,7 @@ void setup() {
     setupLocalApiServer();
     setupTimeNTP();
     if (CLOUD_SYNC_ENABLED) {
-      syncWithServer();
+      syncConfigFromServer();
     }
   }
 
@@ -1806,7 +1933,7 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED && CLOUD_SYNC_ENABLED && millis() - lastSyncMs >= SYNC_INTERVAL_MS) {
     lastSyncMs = millis();
-    syncWithServer();
+    syncConfigFromServer();
   }
 
   printHeartbeat();

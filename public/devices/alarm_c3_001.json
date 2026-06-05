@@ -1,0 +1,15 @@
+{
+  "deviceId": "alarm_c3_001",
+  "enabled": true,
+  "hour": 7,
+  "minute": 30,
+  "repeatMask": 62,
+  "prealertSec": 60,
+  "snoozeMin": 5,
+  "maxRingSec": 300,
+  "hapticEffect": 17,
+  "version": 1,
+  "commandId": 0,
+  "command": "none",
+  "signature": "3f1e9892d7834539ae1fd9445c2791defa79a183d6ecf7f43190e2926dbab901"
+}

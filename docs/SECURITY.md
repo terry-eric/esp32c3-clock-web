@@ -1,41 +1,30 @@
 # Security
 
-This project is designed so private values stay out of GitHub.
+The JSON file is public. Security comes from signature verification, not secrecy of the JSON.
 
-## Do Not Commit
+Public:
 
-- WiFi SSID
-- WiFi password
-- `ALARM_LOCAL_API_TOKEN`
+- JSON config
+- `signature`
+- Device ID
+
+Private:
+
+- WiFi SSID/password
+- `ALARM_CONFIG_HMAC_SECRET`
 - `arduino_secrets.h`
-- Cloudflare account tokens
 
-## Where Secrets Go
+If someone edits the public JSON without the secret, the MCU recalculates HMAC-SHA256 and rejects it.
 
-Put private values only in:
+Never put `ALARM_CONFIG_HMAC_SECRET` in:
 
-```text
-esp32c3_alarm_external_api_complete/arduino_secrets.h
-```
+- `src/`
+- `public/`
+- GitHub docs
+- Cloudflare Pages variables
+- browser localStorage
 
-This file is ignored by git.
+Use a long random secret. Keep the same value in:
 
-## Local API Token
-
-The MCU can protect local API calls with:
-
-```cpp
-#define ALARM_LOCAL_API_TOKEN "local-only-token"
-```
-
-When enabled, the browser sends:
-
-```text
-X-Local-Token: local-only-token
-```
-
-This protects against casual local-network access, but anyone who controls the same browser can see values they type into the page. For a school project or local prototype this is usually enough; for a product, use a stronger provisioning flow.
-
-## No Backend
-
-There is no server-side secret storage in this repo. Cloudflare Pages hosts static files only.
+- your local shell environment when running `npm run sign:config`
+- `esp32c3_alarm_external_api_complete/arduino_secrets.h`
