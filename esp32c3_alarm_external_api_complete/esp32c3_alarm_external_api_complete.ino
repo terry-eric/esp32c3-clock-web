@@ -945,6 +945,24 @@ void runLedTest() {
   allLedOff();
 }
 
+void runDoneNotification(int effectFromCommand) {
+  Serial.println("[CMD] notify_done");
+  lastAction = "VIBE_CODE_DONE";
+
+  int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
+
+  for (int i = 0; i < 3; i++) {
+    digitalWrite(PIN_LED_A, HIGH);
+    digitalWrite(PIN_LED_B, HIGH);
+    digitalWrite(PIN_LED_FLASH, HIGH);
+    playHaptic((uint8_t)effect);
+    delay(180);
+
+    allLedOff();
+    delay(140);
+  }
+}
+
 void stopAlarm() {
   allLedOff();
   if (drvOK) drv.stop();
@@ -987,6 +1005,8 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
     lastAction = "TEST_HAPTIC";
     int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
     playHaptic((uint8_t)effect);
+  } else if (command == "notify_done") {
+    runDoneNotification(effectFromCommand);
   } else if (command == "stop_alarm") {
     stopAlarm();
   } else if (command == "snooze") {
@@ -1311,6 +1331,7 @@ const char LOCAL_WEB_PAGE[] PROGMEM = R"rawliteral(
     <div class="cmds">
       <button onclick="sendCommand('test_led')">測試 LED</button>
       <button onclick="sendCommand('test_haptic')">測試震動</button>
+      <button onclick="sendCommand('notify_done')">Vibe Done</button>
       <button onclick="sendCommand('stop_alarm')">停止鬧鐘</button>
       <button onclick="sendCommand('snooze')">貪睡</button>
     </div>
@@ -1432,6 +1453,7 @@ bool isAllowedLocalCommand(const String& command) {
   return command == "none" ||
          command == "test_led" ||
          command == "test_haptic" ||
+         command == "notify_done" ||
          command == "stop_alarm" ||
          command == "snooze";
 }

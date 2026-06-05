@@ -95,6 +95,28 @@ Usage:
 
 It will ask for the signing secret. The secret is not saved into the EXE or JSON.
 
+## Vibe Coding Done Notification
+
+Codex/Gemini can notify the MCU when a coding task is done by calling the local MCU API:
+
+```powershell
+py scripts\notify_mcu.py --url http://192.168.1.23 --token "<local-token-if-enabled>"
+```
+
+The MCU will run the `notify_done` pattern: three LED flashes plus haptic pulses. This is local-network only; it does not use GitHub or Cloudflare.
+
+You can package it as an EXE too:
+
+```powershell
+py -m PyInstaller --onefile --name esp32c3-notify-mcu scripts\notify_mcu.py
+```
+
+Then run:
+
+```powershell
+.\dist\esp32c3-notify-mcu.exe --url http://192.168.1.23 --token "<local-token-if-enabled>"
+```
+
 ## Cloudflare Pages
 
 ```text

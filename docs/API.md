@@ -43,3 +43,22 @@ alarm_c3_001|1|7|30|62|10|5|10|10|1
 ## Commands
 
 Signed static JSON is not real time, so remote one-time commands were removed from the public JSON format.
+
+## Local Vibe Notification
+
+The MCU still exposes a local-only immediate command for same-WiFi tools:
+
+```text
+POST http://<MCU-IP>/api/local/command
+```
+
+Body:
+
+```json
+{
+  "command": "notify_done",
+  "hapticEffect": 10
+}
+```
+
+Use it from `scripts/notify_mcu.py` when Codex/Gemini finishes coding.

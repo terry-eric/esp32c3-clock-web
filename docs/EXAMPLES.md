@@ -40,6 +40,20 @@ py -m pip install pyinstaller
 py -m PyInstaller --onefile --name esp32c3-config-signer scripts\sign_config.py
 ```
 
+## Vibe Coding Done Notification
+
+Use this when Codex/Gemini finishes a coding task and you want the MCU to flash/vibrate:
+
+```powershell
+py scripts\notify_mcu.py --url http://192.168.1.23 --token "<local-token-if-enabled>"
+```
+
+Build EXE:
+
+```powershell
+py -m PyInstaller --onefile --name esp32c3-notify-mcu scripts\notify_mcu.py
+```
+
 ## MCU Secrets
 
 ```cpp
