@@ -8,7 +8,7 @@ flowchart LR
   B --> C["GitHub / Cloudflare Pages public JSON"]
   D["ESP32-C3"] --> C
   D --> E["用 arduino_secrets.h 的 secret 驗章"]
-  E --> F["通過才套用設定或命令"]
+  E --> F["通過才套用設定"]
 ```
 
 ## What Is Public
@@ -69,6 +69,8 @@ npm run sign:config
 ```
 
 Then push to GitHub. Cloudflare Pages will redeploy the static JSON. The MCU will fetch it on its next sync interval.
+
+Signed static JSON is not immediate, so one-time remote commands were removed. Use it for the next alarm config only.
 
 ## Windows EXE Signer
 

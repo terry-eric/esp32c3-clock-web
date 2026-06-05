@@ -40,14 +40,11 @@
       "hour": 7,
       "minute": 30,
       "repeatMask": 62,
-      "prealertSec": 60,
+      "prealertSec": 10,
       "snoozeMin": 5,
-      "maxRingSec": 300,
-      "hapticEffect": 17,
+      "maxRingSec": 10,
+      "hapticEffect": 10,
       "version": 12,
-
-      "commandId": 0,
-      "command": "none",
       "signature": "..."
     }
 
@@ -64,19 +61,9 @@
     62  = Monday to Friday
     65  = Saturday + Sunday
 
-  command:
-    "none"
-    "test_led"
-    "test_haptic"
-    "stop_alarm"
-    "snooze"
-
-  If command is not "none", commandId should increase every time.
-  MCU only executes a command once when commandId is new.
-
   Signature payload:
 
-    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version|commandId|command
+    deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version
 */
 
 #include <WiFi.h>
@@ -281,10 +268,10 @@ struct AlarmConfig {
   int hour = 7;
   int minute = 30;
   uint8_t repeatMask = 127;
-  int prealertSec = 60;
+  int prealertSec = 10;
   int snoozeMin = 5;
-  int maxRingSec = 300;
-  int hapticEffect = 17;
+  int maxRingSec = 10;
+  int hapticEffect = 10;
   int version = 0;
 };
 
@@ -398,6 +385,7 @@ void allLedOff() {
 
 void playHaptic(uint8_t effect) {
   if (!drvOK) return;
+  if (effect == 0) return;
 
   drv.setWaveform(0, effect);
   drv.setWaveform(1, 0);
@@ -439,10 +427,10 @@ void loadConfigFromNVS() {
   alarmConfig.hour = prefs.getInt("hour", 7);
   alarmConfig.minute = prefs.getInt("minute", 30);
   alarmConfig.repeatMask = prefs.getUChar("repeatMask", 127);
-  alarmConfig.prealertSec = prefs.getInt("prealertSec", 60);
+  alarmConfig.prealertSec = prefs.getInt("prealertSec", 10);
   alarmConfig.snoozeMin = prefs.getInt("snoozeMin", 5);
-  alarmConfig.maxRingSec = prefs.getInt("maxRingSec", 300);
-  alarmConfig.hapticEffect = prefs.getInt("effect", 17);
+  alarmConfig.maxRingSec = prefs.getInt("maxRingSec", 10);
+  alarmConfig.hapticEffect = prefs.getInt("effect", 10);
   alarmConfig.version = prefs.getInt("version", 0);
   lastCommandId = prefs.getInt("lastCmd", 0);
   prefs.end();
@@ -832,8 +820,6 @@ String boolForSignature(bool value) {
 
 String signedConfigPayload(JsonVariantConst doc) {
   const char* deviceId = doc["deviceId"] | "";
-  const char* command = doc["command"] | "none";
-
   if (strlen(deviceId) == 0 ||
       !doc["enabled"].is<bool>() ||
       !doc["hour"].is<int>() ||
@@ -843,8 +829,7 @@ String signedConfigPayload(JsonVariantConst doc) {
       !doc["snoozeMin"].is<int>() ||
       !doc["maxRingSec"].is<int>() ||
       !doc["hapticEffect"].is<int>() ||
-      !doc["version"].is<int>() ||
-      !doc["commandId"].is<int>()) {
+      !doc["version"].is<int>()) {
     return "";
   }
 
@@ -867,10 +852,6 @@ String signedConfigPayload(JsonVariantConst doc) {
   payload += String(doc["hapticEffect"].as<int>());
   payload += "|";
   payload += String(doc["version"].as<int>());
-  payload += "|";
-  payload += String(doc["commandId"].as<int>());
-  payload += "|";
-  payload += String(command);
   return payload;
 }
 
@@ -1046,10 +1027,10 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   alarmConfig.hour = constrain(alarmConfig.hour, 0, 23);
   alarmConfig.minute = constrain(alarmConfig.minute, 0, 59);
   alarmConfig.repeatMask = constrain(alarmConfig.repeatMask, 0, 127);
-  alarmConfig.prealertSec = constrain(alarmConfig.prealertSec, 0, 3600);
-  alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 1, 60);
-  alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 10, 3600);
-  alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 1, 123);
+  alarmConfig.prealertSec = constrain(alarmConfig.prealertSec, 0, 10);
+  alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 0, 10);
+  alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 0, 10);
+  alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 0, 10);
 
   saveConfigToNVS();
 
@@ -1063,12 +1044,6 @@ bool applyConfigFromJson(JsonVariantConst doc) {
                 alarmConfig.maxRingSec,
                 alarmConfig.hapticEffect,
                 alarmConfig.version);
-
-  int commandId = doc["commandId"] | 0;
-  const char* commandCstr = doc["command"] | "none";
-  int commandEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
-
-  executeCommand(commandId, String(commandCstr), commandEffect);
 
   return true;
 }
@@ -1323,8 +1298,8 @@ const char LOCAL_WEB_PAGE[] PROGMEM = R"rawliteral(
     <div class="grid">
       <div><label>小時</label><input id="hour" type="number" min="0" max="23"></div>
       <div><label>分鐘</label><input id="minute" type="number" min="0" max="59"></div>
-      <div><label>震動效果</label><input id="effect" type="number" min="1" max="123"></div>
-      <div><label>貪睡分鐘</label><input id="snooze" type="number" min="1" max="60"></div>
+      <div><label>震動效果</label><input id="effect" type="number" min="0" max="10"></div>
+      <div><label>貪睡分鐘</label><input id="snooze" type="number" min="0" max="10"></div>
     </div>
     <label>Repeat mask</label>
     <input id="repeat" type="number" min="0" max="127">
@@ -1371,7 +1346,7 @@ async function refresh(){
     $('meta').textContent = c.deviceId || 'alarm_c3_001';
     $('hour').value = c.hour ?? 7;
     $('minute').value = c.minute ?? 30;
-    $('effect').value = c.hapticEffect ?? 17;
+    $('effect').value = c.hapticEffect ?? 10;
     $('snooze').value = c.snoozeMin ?? 5;
     $('repeat').value = c.repeatMask ?? 62;
     $('enabled').checked = Boolean(c.enabled);
@@ -1656,17 +1631,7 @@ void updateAlarmEngine() {
 
     if (millis() - lastHapticMs >= HAPTIC_REPEAT_MS) {
       lastHapticMs = millis();
-
-      static uint8_t effectIndex = 0;
-      uint8_t effects[] = {
-        17,
-        10,
-        14,
-        (uint8_t)alarmConfig.hapticEffect
-      };
-
-      playHaptic(effects[effectIndex % 4]);
-      effectIndex++;
+      playHaptic((uint8_t)alarmConfig.hapticEffect);
     }
   }
 
@@ -1702,13 +1667,8 @@ void handleButtonEventShort() {
 
 void handleButtonEventLong() {
   Serial.println("[BTN] Long press");
-
-  if (stateNow == STATE_RINGING || stateNow == STATE_PREALARM || stateNow == STATE_SNOOZE) {
-    stopAlarm();
-  } else {
-    Serial.println("[BTN] Long press ignored outside alarm states");
-    playHaptic(1);
-  }
+  Serial.println("[BTN] Long press ignored");
+  playHaptic(1);
 }
 
 void updateButton() {

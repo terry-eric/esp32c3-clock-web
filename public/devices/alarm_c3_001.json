@@ -4,12 +4,10 @@
   "hour": 7,
   "minute": 30,
   "repeatMask": 62,
-  "prealertSec": 60,
+  "prealertSec": 10,
   "snoozeMin": 5,
-  "maxRingSec": 300,
-  "hapticEffect": 17,
+  "maxRingSec": 10,
+  "hapticEffect": 10,
   "version": 1,
-  "commandId": 0,
-  "command": "none",
-  "signature": "3f1e9892d7834539ae1fd9445c2791defa79a183d6ecf7f43190e2926dbab901"
+  "signature": "ecace3fa2579ae8e8f5c980f339c9eae315f641f4e77406641e6f43ce0feef45"
 }

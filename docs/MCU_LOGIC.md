@@ -24,7 +24,7 @@ flowchart TD
   I -- "Yes" --> J["GET public signed JSON"]
   I -- "No" --> K["Stay local-only"]
   J --> Q{"Signature OK?"}
-  Q -- "Yes" --> R["Apply config / command"]
+  Q -- "Yes" --> R["Apply config"]
   Q -- "No" --> K
   R --> L{"Time OK and driver OK?"}
   K --> L
@@ -73,8 +73,8 @@ stateDiagram-v2
   IDLE --> RINGING: Alarm time reached
   PREALARM --> RINGING: Alarm time reached
   PREALARM --> IDLE: Prealert cancelled
-  RINGING --> SNOOZE: Button / command snooze
-  RINGING --> STOPPED: Button / command stop or max ring timeout
+  RINGING --> SNOOZE: Short press or local command snooze
+  RINGING --> STOPPED: Local command stop or max ring timeout
   SNOOZE --> RINGING: Snooze time reached
   SNOOZE --> IDLE: Snooze cancelled
   STOPPED --> IDLE: Short settle time
@@ -107,6 +107,15 @@ Tuning knobs in `arduino_secrets.h`:
 #define ALARM_WIFI_AUTH_FAST_RETRY_MS 15000UL
 #define ALARM_WIFI_AUTH_FAST_RETRY_MAX 3
 #define ALARM_WIFI_MIN_SECURITY WIFI_AUTH_WPA_PSK
+```
+
+Signed JSON numeric tuning values are clamped to `0..10` on the MCU:
+
+```text
+prealertSec
+snoozeMin
+maxRingSec
+hapticEffect
 ```
 
 If the device still sometimes cannot connect:

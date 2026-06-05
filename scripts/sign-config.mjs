@@ -12,9 +12,7 @@ const SIGNED_FIELDS = [
   'snoozeMin',
   'maxRingSec',
   'hapticEffect',
-  'version',
-  'commandId',
-  'command'
+  'version'
 ];
 
 function parseArgs(argv) {
@@ -46,6 +44,14 @@ function requiredNumber(config, key) {
   return String(config[key]);
 }
 
+function requiredZeroToTen(config, key) {
+  const value = config[key];
+  if (!Number.isInteger(value) || value < 0 || value > 10) {
+    throw new Error(`${key} must be an integer from 0 to 10`);
+  }
+  return String(value);
+}
+
 function buildPayload(config) {
   if (typeof config.deviceId !== 'string' || config.deviceId.length === 0) {
     throw new Error('deviceId must be a non-empty string');
@@ -55,23 +61,17 @@ function buildPayload(config) {
     throw new Error('enabled must be a boolean');
   }
 
-  if (typeof config.command !== 'string' || config.command.length === 0) {
-    throw new Error('command must be a non-empty string');
-  }
-
   return [
     config.deviceId,
     config.enabled ? '1' : '0',
     requiredNumber(config, 'hour'),
     requiredNumber(config, 'minute'),
     requiredNumber(config, 'repeatMask'),
-    requiredNumber(config, 'prealertSec'),
-    requiredNumber(config, 'snoozeMin'),
-    requiredNumber(config, 'maxRingSec'),
-    requiredNumber(config, 'hapticEffect'),
-    requiredNumber(config, 'version'),
-    requiredNumber(config, 'commandId'),
-    config.command
+    requiredZeroToTen(config, 'prealertSec'),
+    requiredZeroToTen(config, 'snoozeMin'),
+    requiredZeroToTen(config, 'maxRingSec'),
+    requiredZeroToTen(config, 'hapticEffect'),
+    requiredZeroToTen(config, 'version')
   ].join('|');
 }
 

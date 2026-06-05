@@ -15,13 +15,11 @@ Example:
   "hour": 7,
   "minute": 30,
   "repeatMask": 62,
-  "prealertSec": 60,
+  "prealertSec": 10,
   "snoozeMin": 5,
-  "maxRingSec": 300,
-  "hapticEffect": 17,
+  "maxRingSec": 10,
+  "hapticEffect": 10,
   "version": 1,
-  "commandId": 0,
-  "command": "none",
   "signature": "..."
 }
 ```
@@ -31,7 +29,7 @@ Example:
 The signature is HMAC-SHA256 over this exact payload:
 
 ```text
-deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version|commandId|command
+deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticEffect|version
 ```
 
 `enabled` is encoded as `1` or `0`.
@@ -39,19 +37,9 @@ deviceId|enabled|hour|minute|repeatMask|prealertSec|snoozeMin|maxRingSec|hapticE
 For the example above:
 
 ```text
-alarm_c3_001|1|7|30|62|60|5|300|17|1|0|none
+alarm_c3_001|1|7|30|62|10|5|10|10|1
 ```
 
 ## Commands
 
-Supported command values:
-
-```text
-none
-test_led
-test_haptic
-stop_alarm
-snooze
-```
-
-Increase `commandId` whenever `command` is not `none`. The MCU executes each command ID once.
+Signed static JSON is not real time, so remote one-time commands were removed from the public JSON format.

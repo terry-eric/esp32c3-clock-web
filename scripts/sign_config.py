@@ -18,8 +18,6 @@ SIGNED_FIELDS = [
     "maxRingSec",
     "hapticEffect",
     "version",
-    "commandId",
-    "command",
 ]
 
 
@@ -30,15 +28,19 @@ def require_int(config, key):
     return str(value)
 
 
+def require_zero_to_ten(config, key):
+    value = config.get(key)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0 or value > 10:
+        raise ValueError(f"{key} must be an integer from 0 to 10")
+    return str(value)
+
+
 def build_payload(config):
     if not isinstance(config.get("deviceId"), str) or not config["deviceId"]:
         raise ValueError("deviceId must be a non-empty string")
 
     if not isinstance(config.get("enabled"), bool):
         raise ValueError("enabled must be a boolean")
-
-    if not isinstance(config.get("command"), str) or not config["command"]:
-        raise ValueError("command must be a non-empty string")
 
     return "|".join(
         [
@@ -47,13 +49,11 @@ def build_payload(config):
             require_int(config, "hour"),
             require_int(config, "minute"),
             require_int(config, "repeatMask"),
-            require_int(config, "prealertSec"),
-            require_int(config, "snoozeMin"),
-            require_int(config, "maxRingSec"),
-            require_int(config, "hapticEffect"),
-            require_int(config, "version"),
-            require_int(config, "commandId"),
-            config["command"],
+            require_zero_to_ten(config, "prealertSec"),
+            require_zero_to_ten(config, "snoozeMin"),
+            require_zero_to_ten(config, "maxRingSec"),
+            require_zero_to_ten(config, "hapticEffect"),
+            require_zero_to_ten(config, "version"),
         ]
     )
 
