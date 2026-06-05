@@ -42,6 +42,9 @@
 
     set_time 1780702200
     set_config {"enabled":true,"hour":7,"minute":30,...}
+    usb_keepalive
+    codex_busy
+    codex_idle
     notify_done 10
     test_led
     test_haptic 10
@@ -241,6 +244,7 @@ const unsigned long WIFI_AUTH_FAST_RETRY_MS       = ALARM_WIFI_AUTH_FAST_RETRY_M
 const unsigned long WIFI_AUTH_FAIL_SETTLE_MS      = 1000UL;
 const unsigned long SYNC_INTERVAL_MS              = 60000;
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
+const unsigned long USB_CONNECTED_TIMEOUT_MS      = 15000;
 
 const unsigned long BUTTON_DEBOUNCE_MS            = 35;
 const unsigned long LONG_PRESS_MS                 = 2000;
@@ -323,6 +327,9 @@ time_t snoozeUntil = 0;
 int lastCommandId = 0;
 int lastCloudCommandId = 0;
 String lastAction = "BOOT";
+unsigned long lastUsbSeenMs = 0;
+bool codexBusyLight = false;
+bool codexDoneLight = false;
 
 bool isAllowedLocalCommand(const String& command);
 
@@ -427,10 +434,22 @@ void writeLedFlash(bool on) {
   writePwmPin(PIN_LED_FLASH, LED_F_PWM_CHANNEL, on ? flashBrightnessToDuty(alarmConfig.flashLedBrightness) : 0);
 }
 
+void writeStatusGreen(bool on) {
+  writeLedA(on);
+}
+
+void writeStatusRed(bool on) {
+  writeLedB(on);
+}
+
 void allLedOff() {
   writeLedA(false);
   writeLedB(false);
   writeLedFlash(false);
+}
+
+bool usbRecentlySeen() {
+  return lastUsbSeenMs > 0 && millis() - lastUsbSeenMs <= USB_CONNECTED_TIMEOUT_MS;
 }
 
 void previewLedBrightness() {
@@ -1037,6 +1056,8 @@ void runLedTest() {
 void runDoneNotification(int effectFromCommand) {
   Serial.println("[CMD] notify_done");
   lastAction = "VIBE_CODE_DONE";
+  codexBusyLight = false;
+  codexDoneLight = true;
 
   int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
 
@@ -1050,6 +1071,20 @@ void runDoneNotification(int effectFromCommand) {
     allLedOff();
     delay(140);
   }
+}
+
+void setCodexBusyLight() {
+  Serial.println("[CMD] codex_busy");
+  lastAction = "CODEX_BUSY";
+  codexBusyLight = true;
+  codexDoneLight = false;
+}
+
+void clearCodexLight() {
+  Serial.println("[CMD] codex_idle");
+  lastAction = "CODEX_IDLE";
+  codexBusyLight = false;
+  codexDoneLight = false;
 }
 
 void stopAlarm() {
@@ -1096,6 +1131,10 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
     playHaptic((uint8_t)effect);
   } else if (command == "notify_done") {
     runDoneNotification(effectFromCommand);
+  } else if (command == "codex_busy") {
+    setCodexBusyLight();
+  } else if (command == "codex_idle") {
+    clearCodexLight();
   } else if (command == "stop_alarm") {
     stopAlarm();
   } else if (command == "snooze") {
@@ -1125,6 +1164,10 @@ void executeCloudCommand(int commandId, String command, int effectFromCommand) {
     playHaptic((uint8_t)effect);
   } else if (command == "notify_done") {
     runDoneNotification(effectFromCommand);
+  } else if (command == "codex_busy") {
+    setCodexBusyLight();
+  } else if (command == "codex_idle") {
+    clearCodexLight();
   } else if (command == "stop_alarm") {
     stopAlarm();
   } else if (command == "snooze") {
@@ -1241,6 +1284,7 @@ void handleUsbCommandLine(String line) {
   if (line.length() == 0) {
     return;
   }
+  lastUsbSeenMs = millis();
 
   String command = line;
   int effect = alarmConfig.hapticEffect;
@@ -1261,6 +1305,10 @@ void handleUsbCommandLine(String line) {
     Serial.print(DEVICE_ID);
     Serial.print(" ");
     Serial.println(DEVICE_NAME);
+    return;
+  }
+
+  if (command == "usb_keepalive") {
     return;
   }
 
@@ -1720,6 +1768,8 @@ bool isAllowedLocalCommand(const String& command) {
          command == "test_led" ||
          command == "test_haptic" ||
          command == "notify_done" ||
+         command == "codex_busy" ||
+         command == "codex_idle" ||
          command == "stop_alarm" ||
          command == "snooze";
 }
@@ -2001,6 +2051,29 @@ void updateButton() {
 
 void updateLedPattern() {
   unsigned long nowMs = millis();
+
+  if (!usbRecentlySeen()) {
+    writeStatusGreen(false);
+    writeStatusRed((nowMs / 500) % 2);
+    writeLedFlash(false);
+    return;
+  }
+
+  if (stateNow == STATE_IDLE || stateNow == STATE_TIME_INVALID || stateNow == STATE_BOOT || stateNow == STATE_STOPPED) {
+    if (codexBusyLight) {
+      writeStatusGreen(false);
+      writeStatusRed(true);
+      writeLedFlash(false);
+      return;
+    }
+
+    if (codexDoneLight) {
+      writeStatusGreen(true);
+      writeStatusRed(false);
+      writeLedFlash(false);
+      return;
+    }
+  }
 
   switch (stateNow) {
     case STATE_BOOT:

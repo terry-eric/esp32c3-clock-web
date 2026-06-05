@@ -24,13 +24,62 @@ const days = [
   ['Sat', 6]
 ];
 
-const commandOptions = [
-  ['notify_done', 'Done alert'],
-  ['test_led', 'Test LEDs'],
-  ['test_haptic', 'Test haptic'],
-  ['stop_alarm', 'Stop alarm'],
-  ['snooze', 'Snooze']
+const usbCommandCatalog = [
+  ['codex_ping', 'Probe USB device; returns codex_pong with device info.'],
+  ['usb_keepalive', 'Marks USB as connected so the MCU does not show red disconnect blink.'],
+  ['set_time', 'Sets MCU clock from computer Unix epoch seconds.'],
+  ['set_config', 'Saves alarm, brightness, and haptic settings to MCU NVS when changed.'],
+  ['codex_busy', 'Shows solid red while Codex is working.'],
+  ['notify_done', 'Stops busy mode, flashes/vibrates, then shows solid green.'],
+  ['codex_idle', 'Clears Codex red/green status and returns to normal LED patterns.'],
+  ['test_led', 'Runs LED hardware test using the current brightness settings.'],
+  ['test_haptic', 'Runs one haptic pulse using the current haptic setting.'],
+  ['stop_alarm', 'Stops the current alarm and enters stopped state.'],
+  ['snooze', 'Snoozes only while alarm/pre-alert is active.']
 ];
+
+const editableCommandChoices = [
+  'codex_busy',
+  'notify_done',
+  'codex_idle',
+  'test_led',
+  'test_haptic',
+  'stop_alarm',
+  'snooze'
+];
+
+const defaultCommandActions = [
+  { id: 'busy', label: 'Codex busy', command: 'codex_busy' },
+  { id: 'done', label: 'Done alert', command: 'notify_done' },
+  { id: 'idle', label: 'Clear status', command: 'codex_idle' },
+  { id: 'leds', label: 'Test LEDs', command: 'test_led' },
+  { id: 'haptic', label: 'Test haptic', command: 'test_haptic' },
+  { id: 'stop', label: 'Stop alarm', command: 'stop_alarm' },
+  { id: 'snooze', label: 'Snooze', command: 'snooze' }
+];
+
+const commandActionsStorageKey = 'esp32c3-clock-web.commandActions.v1';
+
+function loadCommandActions() {
+  if (typeof window === 'undefined') return defaultCommandActions;
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(commandActionsStorageKey) || '[]');
+    if (!Array.isArray(saved) || saved.length === 0) return defaultCommandActions;
+
+    return defaultCommandActions.map((fallback) => {
+      const item = saved.find((candidate) => candidate.id === fallback.id);
+      if (!item || !editableCommandChoices.includes(item.command)) return fallback;
+      return {
+        ...fallback,
+        label: typeof item.label === 'string' && item.label.trim() ? item.label : fallback.label,
+        command: item.command
+      };
+    });
+  } catch {
+    return defaultCommandActions;
+  }
+}
 
 function clampZeroToTen(value) {
   if (!Number.isFinite(value)) return 0;
@@ -76,6 +125,7 @@ function delay(ms) {
 
 export default function App() {
   const [config, setConfig] = useState(defaultConfig);
+  const [commandActions, setCommandActions] = useState(loadCommandActions);
   const [usbState, setUsbState] = useState({
     connected: false,
     supported: typeof navigator !== 'undefined' && 'serial' in navigator,
@@ -93,6 +143,28 @@ export default function App() {
     const intervalId = window.setInterval(() => {
       syncUsbTime({ quiet: true }).catch(() => {});
     }, 60 * 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [usbState.connected]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(commandActionsStorageKey, JSON.stringify(commandActions));
+  }, [commandActions]);
+
+  useEffect(() => {
+    if (!usbState.connected) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      writeUsbLine('usb_keepalive').catch((error) => {
+        setUsbState((current) => ({
+          ...current,
+          connected: false,
+          label: 'Disconnected',
+          detail: error.message
+        }));
+      });
+    }, 5000);
 
     return () => window.clearInterval(intervalId);
   }, [usbState.connected]);
@@ -183,10 +255,16 @@ export default function App() {
     }
   }
 
-  async function sendUsbCommand(command) {
+  function updateCommandAction(id, patch) {
+    setCommandActions((current) =>
+      current.map((action) => (action.id === id ? { ...action, ...patch } : action))
+    );
+  }
+
+  async function sendUsbCommand(action) {
     try {
       await applyUsbConfig({ quiet: true });
-      await writeUsbLine(`${command} ${config.hapticEffect}`);
+      await writeUsbLine(`${action.command} ${config.hapticEffect}`);
       setUsbState((current) => ({
         ...current,
         label: 'Sent'
@@ -361,19 +439,58 @@ export default function App() {
               <div className="rounded-md border border-stone-300 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
                   <FieldLabel>USB command</FieldLabel>
-                  <span className="text-xs font-semibold text-teal-700">Immediate</span>
+                  <span className="text-xs font-semibold text-teal-700">Applies settings first</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {commandOptions.map(([value, label]) => (
+                  {commandActions.map((action) => (
                     <button
-                      key={value}
+                      key={action.id}
                       type="button"
-                      onClick={() => sendUsbCommand(value)}
+                      onClick={() => sendUsbCommand(action)}
                       disabled={!usbState.connected}
                       className={`h-10 rounded-md border px-2 text-sm font-semibold ${usbState.connected ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500' : 'border-stone-200 bg-stone-100 text-stone-400'}`}
                     >
-                      {label}
+                      {action.label}
                     </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-stone-300 bg-white p-4">
+                <FieldLabel>Edit command buttons</FieldLabel>
+                <div className="space-y-2">
+                  {commandActions.map((action) => (
+                    <div key={action.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
+                      <input
+                        type="text"
+                        value={action.label}
+                        onChange={(event) => updateCommandAction(action.id, { label: event.target.value })}
+                        className="h-10 min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+                      />
+                      <select
+                        value={action.command}
+                        onChange={(event) => updateCommandAction(action.id, { command: event.target.value })}
+                        className="h-10 min-w-0 rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
+                      >
+                        {editableCommandChoices.map((command) => (
+                          <option key={command} value={command}>
+                            {command}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-stone-300 bg-white p-4">
+                <FieldLabel>USB command behavior</FieldLabel>
+                <div className="divide-y divide-stone-200">
+                  {usbCommandCatalog.map(([command, behavior]) => (
+                    <div key={command} className="grid gap-1 py-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+                      <code className="text-xs font-semibold text-teal-700">{command}</code>
+                      <div className="text-xs leading-5 text-stone-600">{behavior}</div>
+                    </div>
                   ))}
                 </div>
               </div>

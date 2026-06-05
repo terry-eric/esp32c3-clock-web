@@ -47,8 +47,11 @@ The MCU accepts these USB serial commands at `115200` baud:
 
 ```text
 codex_ping
+usb_keepalive
 set_time 1780000000
+codex_busy
 notify_done 10
+codex_idle
 test_led
 test_haptic 10
 stop_alarm
@@ -67,12 +70,20 @@ Codex/Gemini can notify the MCU when a coding task is done:
 python scripts\notify_mcu.py --mode usb
 ```
 
+Use `--state busy` when Codex starts a coding task and `--state done` when the task finishes:
+
+```powershell
+python scripts\notify_mcu.py --mode usb --state busy
+python scripts\notify_mcu.py --mode usb --state done
+```
+
 Optional local `.env`:
 
 ```text
 MCU_NOTIFY_MODE=usb
 MCU_NOTIFY_PORT=
 MCU_NOTIFY_EFFECT=10
+MCU_NOTIFY_STATE=done
 ```
 
 Leave `MCU_NOTIFY_PORT` empty to auto-detect the MCU with `codex_ping`. Set it to `COM4` only if you want to force one port.

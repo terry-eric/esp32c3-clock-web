@@ -78,16 +78,22 @@ def probe_usb(port):
     return " ".join(reply.split())
 
 
-def notify_usb(port, effect):
-    command = f"notify_done {effect}"
+def notify_usb(port, state, effect):
+    commands = {
+        "busy": "codex_busy",
+        "done": f"notify_done {effect}",
+        "idle": "codex_idle",
+        "keepalive": "usb_keepalive",
+    }
+    command = commands[state]
     run_serial_command(port, command)
     print(f"MCU notified by USB serial: {port} -> {command}")
 
 
-def notify_usb_auto(preferred_port, effect):
+def notify_usb_auto(preferred_port, state, effect):
     failures = []
     if preferred_port:
-        notify_usb(preferred_port, effect)
+        notify_usb(preferred_port, state, effect)
         return
 
     for port in serial_ports(preferred_port):
@@ -96,7 +102,7 @@ def notify_usb_auto(preferred_port, effect):
             if not reply:
                 continue
             print(f"Found MCU on {port}: {reply}")
-            notify_usb(port, effect)
+            notify_usb(port, state, effect)
             return
         except Exception as exc:
             failures.append(f"{port}: {exc}")
@@ -108,14 +114,15 @@ def notify_usb_auto(preferred_port, effect):
 def main():
     load_local_env()
 
-    parser = argparse.ArgumentParser(description="Notify the ESP32-C3 alarm device that coding is done.")
+    parser = argparse.ArgumentParser(description="Notify the ESP32-C3 alarm device about Codex status.")
     parser.add_argument("--mode", choices=["usb"], default=os.environ.get("MCU_NOTIFY_MODE", "usb"))
     parser.add_argument("--port", default=os.environ.get("MCU_NOTIFY_PORT", ""), help="USB serial port, for example COM4")
+    parser.add_argument("--state", choices=["busy", "done", "idle", "keepalive"], default=os.environ.get("MCU_NOTIFY_STATE", "done"))
     parser.add_argument("--effect", type=int, default=int(os.environ.get("MCU_NOTIFY_EFFECT", "10")), help="Haptic effect, 0-10")
     args = parser.parse_args()
 
     effect = clamp_effect(args.effect)
-    notify_usb_auto(args.port, effect)
+    notify_usb_auto(args.port, args.state, effect)
 
 
 if __name__ == "__main__":
