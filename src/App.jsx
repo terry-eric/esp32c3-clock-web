@@ -1,8 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 
 const defaultConfig = {
-  deviceId: 'alarm_c3_001',
-  deviceName: 'Codex Done Light',
   enabled: true,
   hour: 7,
   minute: 30,
@@ -88,10 +86,6 @@ export default function App() {
 
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
-
-  function update(patch) {
-    setConfig((current) => ({ ...current, ...patch }));
-  }
 
   function bumpVersion(patch = {}) {
     setConfig((current) => ({
@@ -272,9 +266,9 @@ export default function App() {
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">ESP32-C3 Alarm Console</p>
-            <h1 className="mt-1 text-2xl font-semibold">{config.deviceName}</h1>
+            <h1 className="mt-1 text-2xl font-semibold">Codex Done Light</h1>
           </div>
-          <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[360px]">
+          <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[320px]">
             <StatusPill label="Alarm" value={config.enabled ? 'On' : 'Off'} active={config.enabled} />
             <StatusPill label="Time" value={alarmTime} />
             <StatusPill label="Control" value="USB" active />
@@ -285,19 +279,15 @@ export default function App() {
       <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <section className="space-y-5">
           <Panel title="Alarm">
-            <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
-              <label className="block">
+            <div className="grid gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
+              <div>
                 <FieldLabel>Time</FieldLabel>
-                <input
-                  type="time"
-                  value={alarmTime}
-                  onChange={(event) => {
-                    const [hour, minute] = event.target.value.split(':').map(Number);
-                    bumpVersion({ hour: clampHour(hour), minute: clampMinute(minute) });
-                  }}
-                  className="h-14 w-full rounded-md border border-stone-300 bg-white px-3 text-2xl font-semibold tabular-nums outline-none focus:border-teal-600"
+                <TimeField
+                  hour={config.hour}
+                  minute={config.minute}
+                  onChange={(patch) => bumpVersion(patch)}
                 />
-              </label>
+              </div>
               <div>
                 <FieldLabel>Repeat</FieldLabel>
                 <div className="grid grid-cols-7 gap-2">
@@ -308,7 +298,7 @@ export default function App() {
                         key={bit}
                         type="button"
                         onClick={() => bumpVersion({ repeatMask: config.repeatMask ^ (1 << bit) })}
-                        className={`h-14 rounded-md border text-sm font-semibold transition ${
+                        className={`h-14 min-w-0 rounded-md border text-sm font-semibold transition ${
                           selected
                             ? 'border-teal-700 bg-teal-700 text-white'
                             : 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
@@ -344,13 +334,6 @@ export default function App() {
               <RangeField label="Haptic" unit="/10" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: value })} />
             </div>
           </Panel>
-
-          <Panel title="Device">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField label="Friendly name" value={config.deviceName} onChange={(value) => update({ deviceName: value })} />
-              <TextField label="Device ID" value={config.deviceId} onChange={(value) => update({ deviceId: value })} />
-            </div>
-          </Panel>
         </section>
 
         <aside className="space-y-5">
@@ -366,13 +349,13 @@ export default function App() {
                     <div className="mt-2 break-all text-xs text-stone-500">{usbState.detail}</div>
                   </div>
                   <div className="grid grid-cols-3 gap-2 sm:w-[315px]">
-                    <button type="button" onClick={connectUsb} className="h-10 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
+                    <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       Connect
                     </button>
-                    <button type="button" onClick={syncUsbTime} disabled={!usbState.connected} className={`h-10 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={syncUsbTime} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
                       Time
                     </button>
-                    <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
                       Apply
                     </button>
                   </div>
@@ -447,26 +430,49 @@ function Toggle({ checked, onClick }) {
   );
 }
 
-function TextField({ label, value, onChange }) {
+function TimeField({ hour, minute, onChange }) {
   return (
-    <label className="block">
-      <FieldLabel>{label}</FieldLabel>
-      <input
-        type="text"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+    <div className="grid h-14 grid-cols-[1fr_auto_1fr] items-center rounded-md border border-stone-300 bg-white px-2">
+      <NumberCell
+        value={hour}
+        min={0}
+        max={23}
+        ariaLabel="Alarm hour"
+        onChange={(value) => onChange({ hour: clampHour(value) })}
       />
-    </label>
+      <span className="px-1 text-xl font-semibold text-stone-400">:</span>
+      <NumberCell
+        value={minute}
+        min={0}
+        max={59}
+        ariaLabel="Alarm minute"
+        onChange={(value) => onChange({ minute: clampMinute(value) })}
+      />
+    </div>
+  );
+}
+
+function NumberCell({ value, min, max, ariaLabel, onChange }) {
+  return (
+    <input
+      type="number"
+      value={String(value).padStart(2, '0')}
+      min={min}
+      max={max}
+      aria-label={ariaLabel}
+      onChange={(event) => onChange(Number(event.target.value))}
+      onBlur={(event) => onChange(Number(event.target.value))}
+      className="h-11 w-full min-w-0 rounded border-0 bg-transparent px-1 text-center text-2xl font-semibold leading-none tabular-nums outline-none"
+    />
   );
 }
 
 function RangeField({ label, unit, value, onChange }) {
   return (
     <label className="block rounded-md border border-stone-300 bg-white p-3">
-      <div className="flex items-center justify-between gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <FieldLabel>{label}</FieldLabel>
-        <span className="text-sm font-semibold tabular-nums">
+        <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
           {value}
           <span className="text-stone-400">{unit}</span>
         </span>

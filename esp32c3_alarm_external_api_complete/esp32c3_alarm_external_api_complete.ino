@@ -456,6 +456,14 @@ void allLedOff() {
   writeLedFlash(false);
 }
 
+void previewLedBrightness() {
+  writeLedA(true);
+  writeLedB(true);
+  writeLedFlash(true);
+  delay(220);
+  allLedOff();
+}
+
 void playHaptic(uint8_t effect) {
   if (!drvOK) return;
   if (effect == 0) return;
@@ -1214,6 +1222,10 @@ bool applyConfigFromJson(JsonVariantConst doc) {
     previousFlashLedBrightness != alarmConfig.flashLedBrightness ||
     previousVersion != alarmConfig.version;
 
+  bool brightnessChanged =
+    previousLedPairBrightness != alarmConfig.ledPairBrightness ||
+    previousFlashLedBrightness != alarmConfig.flashLedBrightness;
+
   if (configChanged) {
     saveConfigToNVS();
     Serial.println("[NVS] Config changed, saved");
@@ -1237,6 +1249,11 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   int incomingCommandId = doc["commandId"] | lastCloudCommandId;
   String incomingCommand = String(doc["command"] | "none");
   int incomingEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
+
+  if (brightnessChanged && incomingCommand == "none") {
+    previewLedBrightness();
+  }
+
   executeCloudCommand(incomingCommandId, incomingCommand, incomingEffect);
 
   return true;

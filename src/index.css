@@ -22,6 +22,20 @@ input {
   font: inherit;
 }
 
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="range"] {
+  min-width: 0;
+}
+
 button {
   cursor: pointer;
 }
