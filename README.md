@@ -117,6 +117,38 @@ Then run:
 .\dist\esp32c3-notify-mcu.exe --url http://192.168.1.23 --token "<local-token-if-enabled>"
 ```
 
+### Codex Global Prompt Setup
+
+You can use Codex custom prompts in `~/.codex/prompts/*.md`, where the Markdown filename becomes a slash command. For behavior that should apply across projects, use a user-level Codex instruction/`AGENTS.md`.
+
+Set local environment variables first, so the prompt does not contain your MCU IP/token:
+
+```powershell
+$env:MCU_NOTIFY_URL="http://192.168.1.23"
+$env:MCU_NOTIFY_TOKEN="<local-token-if-enabled>"
+$env:MCU_NOTIFY_EFFECT="10"
+```
+
+Then create:
+
+```text
+~/.codex/prompts/mcu-done.md
+```
+
+Use the template in:
+
+```text
+docs/CODEX_GLOBAL_PROMPT.md
+```
+
+After Codex finishes a task, run:
+
+```text
+/mcu-done
+```
+
+For more automatic behavior, copy the user-level `AGENTS.md` snippet from `docs/CODEX_GLOBAL_PROMPT.md` into your Codex global instructions. Keep tokens in environment variables, never inside the prompt file.
+
 ## Cloudflare Pages
 
 ```text

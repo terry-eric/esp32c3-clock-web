@@ -1,14 +1,18 @@
 import argparse
 import json
+import os
 from urllib import error, request
 
 
 def main():
     parser = argparse.ArgumentParser(description="Notify the ESP32-C3 alarm device that coding is done.")
-    parser.add_argument("--url", required=True, help="MCU base URL, for example http://192.168.1.23")
-    parser.add_argument("--token", default="", help="Optional ALARM_LOCAL_API_TOKEN")
-    parser.add_argument("--effect", type=int, default=10, help="Haptic effect, 0-10")
+    parser.add_argument("--url", default=os.environ.get("MCU_NOTIFY_URL", ""), help="MCU base URL, for example http://192.168.1.23")
+    parser.add_argument("--token", default=os.environ.get("MCU_NOTIFY_TOKEN", ""), help="Optional ALARM_LOCAL_API_TOKEN")
+    parser.add_argument("--effect", type=int, default=int(os.environ.get("MCU_NOTIFY_EFFECT", "10")), help="Haptic effect, 0-10")
     args = parser.parse_args()
+
+    if not args.url:
+        raise SystemExit("Missing MCU URL. Pass --url or set MCU_NOTIFY_URL.")
 
     base_url = args.url.rstrip("/")
     endpoint = f"{base_url}/api/local/command"
