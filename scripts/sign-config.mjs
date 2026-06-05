@@ -81,7 +81,7 @@ function buildPayload(config) {
     requiredZeroToTen(config, 'hapticEffect'),
     requiredZeroToTen(config, 'ledPairBrightness'),
     requiredZeroToTen(config, 'flashLedBrightness'),
-    requiredZeroToTen(config, 'version'),
+    requiredNumber(config, 'version'),
     requiredNumber(config, 'commandId'),
     config.command
   ].join('|');

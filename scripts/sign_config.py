@@ -62,7 +62,7 @@ def build_payload(config):
             require_zero_to_ten(config, "hapticEffect"),
             require_zero_to_ten(config, "ledPairBrightness"),
             require_zero_to_ten(config, "flashLedBrightness"),
-            require_zero_to_ten(config, "version"),
+            require_int(config, "version"),
             require_int(config, "commandId"),
             config["command"],
         ]

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 
 const defaultConfig = {
   deviceId: 'alarm_c3_001',
+  deviceName: 'Codex Done Light',
   enabled: true,
   hour: 7,
   minute: 30,
@@ -18,18 +19,37 @@ const defaultConfig = {
 };
 
 const days = [
-  ['日', 0],
-  ['一', 1],
-  ['二', 2],
-  ['三', 3],
-  ['四', 4],
-  ['五', 5],
-  ['六', 6]
+  ['Sun', 0],
+  ['Mon', 1],
+  ['Tue', 2],
+  ['Wed', 3],
+  ['Thu', 4],
+  ['Fri', 5],
+  ['Sat', 6]
+];
+
+const commandOptions = [
+  ['none', 'No command'],
+  ['notify_done', 'Done alert'],
+  ['test_led', 'Test LEDs'],
+  ['test_haptic', 'Test haptic'],
+  ['stop_alarm', 'Stop alarm'],
+  ['snooze', 'Snooze']
 ];
 
 function clampZeroToTen(value) {
   if (!Number.isFinite(value)) return 0;
   return Math.min(10, Math.max(0, Math.round(value)));
+}
+
+function clampHour(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(23, Math.max(0, Math.round(value)));
+}
+
+function clampMinute(value) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(59, Math.max(0, Math.round(value)));
 }
 
 function signedPayload(config) {
@@ -52,7 +72,12 @@ function signedPayload(config) {
 }
 
 function toJson(config) {
-  return JSON.stringify({ ...config, signature: '<run sign-config.mjs>' }, null, 2);
+  const { deviceName, ...signedConfig } = config;
+  return JSON.stringify({ ...signedConfig, signature: '<run sign-config.mjs>' }, null, 2);
+}
+
+function formatTime(config) {
+  return `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 }
 
 export default function App() {
@@ -61,7 +86,8 @@ export default function App() {
   const publicPath = useMemo(() => `/devices/${config.deviceId}.json`, [config.deviceId]);
   const payload = useMemo(() => signedPayload(config), [config]);
   const jsonText = useMemo(() => toJson(config), [config]);
-  const alarmTime = `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
+  const alarmTime = formatTime(config);
+  const syncUrl = `https://esp32c3-clock-web.pages.dev${publicPath}`;
 
   function update(patch) {
     setConfig((current) => ({ ...current, ...patch }));
@@ -75,110 +101,163 @@ export default function App() {
     }));
   }
 
-  return (
-    <main className="min-h-screen bg-neutral-950 text-neutral-100">
-      <section className="border-b border-neutral-800 bg-neutral-900">
-        <div className="mx-auto max-w-6xl px-4 py-5">
-          <h1 className="text-xl font-semibold">ESP32-C3 Signed Config</h1>
-          <p className="mt-1 text-sm text-neutral-400">
-            無後端模式：只產生簽章設定。MCU 定期抓 JSON，驗章通過才套用。
-          </p>
-        </div>
-      </section>
+  function queueCommand(command) {
+    setConfig((current) => ({
+      ...current,
+      command,
+      commandId: current.commandId + 1
+    }));
+  }
 
-      <div className="mx-auto grid max-w-6xl gap-5 px-4 py-5 lg:grid-cols-[1fr_1fr]">
+  return (
+    <main className="min-h-screen bg-[#f4f5f0] text-stone-950">
+      <header className="border-b border-stone-300 bg-[#e8eadf]">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">ESP32-C3 Alarm Console</p>
+            <h1 className="mt-1 text-2xl font-semibold">{config.deviceName}</h1>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs sm:min-w-[360px]">
+            <StatusPill label="Alarm" value={config.enabled ? 'On' : 'Off'} active={config.enabled} />
+            <StatusPill label="Time" value={alarmTime} />
+            <StatusPill label="Cloud cmd" value={config.command === 'none' ? 'Idle' : config.command} active={config.command !== 'none'} />
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
         <section className="space-y-5">
-          <Panel title="鬧鐘設定">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField label="Device ID" value={config.deviceId} onChange={(value) => update({ deviceId: value })} />
-              <NumberField label="Version" value={config.version} onChange={(value) => update({ version: clampZeroToTen(value) })} />
-              <label className="text-sm">
-                <span className="mb-1 block text-neutral-400">時間</span>
+          <Panel title="Alarm">
+            <div className="grid gap-4 md:grid-cols-[180px_minmax(0,1fr)]">
+              <label className="block">
+                <FieldLabel>Time</FieldLabel>
                 <input
                   type="time"
                   value={alarmTime}
                   onChange={(event) => {
                     const [hour, minute] = event.target.value.split(':').map(Number);
-                    bumpVersion({ hour, minute });
+                    bumpVersion({ hour: clampHour(hour), minute: clampMinute(minute) });
                   }}
-                  className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
+                  className="h-14 w-full rounded-md border border-stone-300 bg-white px-3 text-2xl font-semibold tabular-nums outline-none focus:border-teal-600"
                 />
               </label>
-              <NumberField label="震動效果" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: clampZeroToTen(value) })} />
-              <NumberField label="紅綠 LED 亮度" value={config.ledPairBrightness} onChange={(value) => bumpVersion({ ledPairBrightness: clampZeroToTen(value) })} />
-              <NumberField label="閃燈 LED 亮度" value={config.flashLedBrightness} onChange={(value) => bumpVersion({ flashLedBrightness: clampZeroToTen(value) })} />
-              <NumberField label="預提醒秒數" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: clampZeroToTen(value) })} />
-              <NumberField label="貪睡分鐘" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: clampZeroToTen(value) })} />
-              <NumberField label="最長響鈴秒數" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: clampZeroToTen(value) })} />
-            </div>
-
-            <div className="mt-4">
-              <div className="mb-2 text-sm text-neutral-400">重複日期</div>
-              <div className="grid grid-cols-7 gap-2">
-                {days.map(([label, bit]) => {
-                  const selected = (config.repeatMask & (1 << bit)) !== 0;
-                  return (
-                    <button
-                      key={bit}
-                      type="button"
-                      onClick={() => bumpVersion({ repeatMask: config.repeatMask ^ (1 << bit) })}
-                      className={`h-10 rounded border text-sm font-medium ${
-                        selected
-                          ? 'border-cyan-500 bg-cyan-500 text-neutral-950'
-                          : 'border-neutral-700 bg-neutral-950 text-neutral-300 hover:bg-neutral-800'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
+              <div>
+                <FieldLabel>Repeat</FieldLabel>
+                <div className="grid grid-cols-7 gap-2">
+                  {days.map(([label, bit]) => {
+                    const selected = (config.repeatMask & (1 << bit)) !== 0;
+                    return (
+                      <button
+                        key={bit}
+                        type="button"
+                        onClick={() => bumpVersion({ repeatMask: config.repeatMask ^ (1 << bit) })}
+                        className={`h-14 rounded-md border text-sm font-semibold transition ${
+                          selected
+                            ? 'border-teal-700 bg-teal-700 text-white'
+                            : 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
-            <div className="mt-5 flex items-center justify-between border-t border-neutral-800 pt-4">
-              <span className="text-sm text-neutral-400">啟用鬧鐘</span>
-              <button
-                type="button"
-                onClick={() => bumpVersion({ enabled: !config.enabled })}
-                className={`h-10 rounded px-4 text-sm font-semibold ${
-                  config.enabled ? 'bg-emerald-500 text-neutral-950' : 'bg-neutral-800 text-neutral-300'
-                }`}
-              >
-                {config.enabled ? '已啟用' : '已關閉'}
-              </button>
+            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              <RangeField label="Pre-alert" unit="sec" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: value })} />
+              <RangeField label="Snooze" unit="min" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: value })} />
+              <RangeField label="Max ring" unit="sec" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: value })} />
+            </div>
+
+            <div className="mt-5 flex items-center justify-between border-t border-stone-200 pt-4">
+              <div>
+                <div className="text-sm font-semibold">Alarm enabled</div>
+                <div className="text-sm text-stone-500">Version {config.version}</div>
+              </div>
+              <Toggle checked={config.enabled} onClick={() => bumpVersion({ enabled: !config.enabled })} />
+            </div>
+          </Panel>
+
+          <Panel title="MCU Outputs">
+            <div className="grid gap-4 md:grid-cols-3">
+              <RangeField label="Main LEDs" unit="/10" value={config.ledPairBrightness} onChange={(value) => bumpVersion({ ledPairBrightness: value })} />
+              <RangeField label="Flash LED" unit="/10" value={config.flashLedBrightness} onChange={(value) => bumpVersion({ flashLedBrightness: value })} />
+              <RangeField label="Haptic" unit="/10" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: value })} />
+            </div>
+          </Panel>
+
+          <Panel title="Device">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <TextField label="Friendly name" value={config.deviceName} onChange={(value) => update({ deviceName: value })} />
+              <TextField label="Device ID" value={config.deviceId} onChange={(value) => update({ deviceId: value })} />
             </div>
           </Panel>
         </section>
 
         <aside className="space-y-5">
-          <Panel title="公開 JSON">
-            <p className="mb-3 text-sm text-neutral-400">
-              將內容放到 <span className="font-mono text-neutral-200">public{publicPath}</span>，再用本機 secret 簽章。
-            </p>
-            <pre className="max-h-[360px] overflow-auto rounded bg-neutral-950 p-3 text-xs text-neutral-200">{jsonText}</pre>
+          <Panel title="Notify">
+            <div className="grid gap-3">
+              <div className="rounded-md border border-stone-300 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold">USB</div>
+                    <code className="mt-2 block break-all rounded bg-stone-100 px-2 py-1 text-xs text-stone-700">
+                      python scripts\notify_mcu.py --mode usb
+                    </code>
+                  </div>
+                  <span className="rounded-md bg-stone-900 px-3 py-2 text-sm font-semibold text-white">
+                    Auto detect
+                  </span>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-stone-300 bg-white p-4">
+                <FieldLabel>Website command</FieldLabel>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {commandOptions.map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => queueCommand(value)}
+                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${
+                        config.command === value
+                          ? 'border-amber-600 bg-amber-100 text-amber-900'
+                          : 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 flex items-center justify-between text-sm">
+                  <span className="text-stone-500">Command ID</span>
+                  <span className="font-mono font-semibold">{config.commandId}</span>
+                </div>
+              </div>
+            </div>
           </Panel>
 
-          <Panel title="簽章方式">
-            <p className="text-sm leading-6 text-neutral-400">
-              Secret key 不放網站、不放 JSON、不放 GitHub。公開 JSON 只負責更新下一次鬧鐘設定。
-            </p>
-            <div className="mt-4 rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-200">
-              <p>$env:ALARM_CONFIG_HMAC_SECRET=&quot;你的私密 key&quot;</p>
+          <Panel title="Signed JSON">
+            <div className="space-y-3">
+              <div className="rounded-md border border-stone-300 bg-white p-3">
+                <FieldLabel>Cloud URL</FieldLabel>
+                <code className="block break-all text-xs text-stone-700">{syncUrl}</code>
+              </div>
+              <pre className="max-h-[340px] overflow-auto rounded-md bg-stone-950 p-3 text-xs text-stone-100">{jsonText}</pre>
+            </div>
+          </Panel>
+
+          <Panel title="Signature">
+            <div className="rounded-md bg-stone-950 p-3 font-mono text-xs text-stone-100">
+              <p>$env:ALARM_CONFIG_HMAC_SECRET=&quot;your-private-signing-secret&quot;</p>
               <p>npm run sign:config</p>
             </div>
-            <div className="mt-4">
-              <p className="mb-1 text-sm text-neutral-400">MCU 驗章 payload</p>
-              <pre className="overflow-auto rounded bg-neutral-950 p-3 text-xs text-neutral-200">{payload}</pre>
+            <div className="mt-3">
+              <FieldLabel>Payload</FieldLabel>
+              <pre className="max-h-[120px] overflow-auto rounded-md bg-white p-3 text-xs text-stone-700">{payload}</pre>
             </div>
-          </Panel>
-
-          <Panel title="MCU 抓取路徑">
-            <div className="rounded bg-neutral-950 p-3 font-mono text-xs text-neutral-200">
-              https://esp32c3-clock-web.pages.dev{publicPath}
-            </div>
-            <p className="mt-3 text-sm leading-6 text-neutral-400">
-              JSON 內容大家看得到，但沒有 secret key 的人無法產生正確 signature，所以 MCU 會拒絕被竄改的設定。
-            </p>
           </Panel>
         </aside>
       </div>
@@ -188,40 +267,71 @@ export default function App() {
 
 function Panel({ title, children }) {
   return (
-    <section className="rounded border border-neutral-800 bg-neutral-900 p-5">
+    <section className="rounded-md border border-stone-300 bg-[#fbfbf7] p-5 shadow-sm">
       <h2 className="text-base font-semibold">{title}</h2>
       <div className="mt-4">{children}</div>
     </section>
   );
 }
 
-function TextField({ label, value, onChange, placeholder = '' }) {
+function FieldLabel({ children }) {
+  return <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.12em] text-stone-500">{children}</span>;
+}
+
+function StatusPill({ label, value, active = false }) {
   return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-neutral-400">{label}</span>
+    <div className={`rounded-md border px-3 py-2 ${active ? 'border-teal-700 bg-teal-700 text-white' : 'border-stone-300 bg-white text-stone-700'}`}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-75">{label}</div>
+      <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function Toggle({ checked, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative h-8 w-14 rounded-full transition ${checked ? 'bg-teal-700' : 'bg-stone-300'}`}
+      aria-pressed={checked}
+    >
+      <span className={`absolute top-1 h-6 w-6 rounded-full bg-white transition ${checked ? 'left-7' : 'left-1'}`} />
+    </button>
+  );
+}
+
+function TextField({ label, value, onChange }) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
       <input
         type="text"
         value={value}
-        placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
+        className="h-11 w-full rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
       />
     </label>
   );
 }
 
-function NumberField({ label, value, onChange }) {
+function RangeField({ label, unit, value, onChange }) {
   return (
-    <label className="text-sm">
-      <span className="mb-1 block text-neutral-400">{label}</span>
+    <label className="block rounded-md border border-stone-300 bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <FieldLabel>{label}</FieldLabel>
+        <span className="text-sm font-semibold tabular-nums">
+          {value}
+          <span className="text-stone-400">{unit}</span>
+        </span>
+      </div>
       <input
-        type="number"
+        type="range"
         value={value}
         min={0}
         max={10}
         step={1}
-        onChange={(event) => onChange(Number(event.target.value))}
-        className="h-11 w-full rounded border border-neutral-700 bg-neutral-950 px-3 text-neutral-100"
+        onChange={(event) => onChange(clampZeroToTen(Number(event.target.value)))}
+        className="mt-3 w-full accent-teal-700"
       />
     </label>
   );
