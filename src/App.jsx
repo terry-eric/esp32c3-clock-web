@@ -57,6 +57,7 @@ const editableCommandChoices = [
 ];
 
 const lightModeChoices = ['off', 'on', 'blink', 'toggle'];
+const hapticModeChoices = ['off', 'on', 'blink', 'toggle'];
 
 const defaultPattern = {
   green: 'off',
@@ -175,6 +176,25 @@ function modeLabel(mode, language) {
   return text[language][keyByMode[mode]] || mode;
 }
 
+const hapticModeNames = {
+  en: {
+    off: 'Off',
+    on: 'Pulse every step',
+    blink: 'Pulse on blink',
+    toggle: 'Pulse on toggle'
+  },
+  zh: {
+    off: '\u95dc\u9589',
+    on: '\u6bcf\u6b65\u9707\u52d5',
+    blink: '\u9583\u720d\u6642\u9707\u52d5',
+    toggle: '\u5207\u63db\u6642\u9707\u52d5'
+  }
+};
+
+function hapticModeLabel(mode, language) {
+  return hapticModeNames[language]?.[mode] || hapticModeNames.en[mode] || mode;
+}
+
 const usbStatusText = {
   'Not connected': { en: 'Not connected', zh: '未連線' },
   'Browser unsupported': { en: 'Browser unsupported', zh: '瀏覽器不支援' },
@@ -227,7 +247,7 @@ function loadCommandActions() {
         green: lightModeChoices.includes(sourcePattern.green) ? sourcePattern.green : fallback.pattern.green,
         red: lightModeChoices.includes(sourcePattern.red) ? sourcePattern.red : fallback.pattern.red,
         flash: lightModeChoices.includes(sourcePattern.flash) ? sourcePattern.flash : fallback.pattern.flash,
-        haptic: lightModeChoices.includes(sourcePattern.haptic) ? sourcePattern.haptic : fallback.pattern.haptic,
+        haptic: hapticModeChoices.includes(sourcePattern.haptic) ? sourcePattern.haptic : fallback.pattern.haptic,
         intervalMs: Math.min(2000, Math.max(50, Number(sourcePattern.intervalMs) || fallback.pattern.intervalMs)),
         count: Math.min(20, Math.max(1, Number(sourcePattern.count) || fallback.pattern.count))
       };
@@ -868,7 +888,7 @@ export default function App() {
                   <PatternSelect label={t.greenLed} value={selectedAction.pattern.green} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { green: value })} />
                   <PatternSelect label={t.redLed} value={selectedAction.pattern.red} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { red: value })} />
                   <PatternSelect label={t.flashLedShort} value={selectedAction.pattern.flash} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { flash: value })} />
-                  <PatternSelect label={t.haptic} value={selectedAction.pattern.haptic} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { haptic: value })} />
+                  <HapticSelect label={t.haptic} value={selectedAction.pattern.haptic} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { haptic: value })} />
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <NumberField
@@ -1006,6 +1026,25 @@ function PatternSelect({ label, value, language, onChange }) {
         {lightModeChoices.map((mode) => (
           <option key={mode} value={mode}>
             {modeLabel(mode, language)}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function HapticSelect({ label, value, language, onChange }) {
+  return (
+    <label className="block">
+      <FieldLabel>{label}</FieldLabel>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-10 w-full rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
+      >
+        {hapticModeChoices.map((mode) => (
+          <option key={mode} value={mode}>
+            {hapticModeLabel(mode, language)}
           </option>
         ))}
       </select>

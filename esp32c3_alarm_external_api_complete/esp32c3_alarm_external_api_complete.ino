@@ -84,6 +84,10 @@
 #define ALARM_DEVICE_NAME "Codex Done Light"
 #endif
 
+#ifndef ALARM_HAPTIC_USE_LRA
+#define ALARM_HAPTIC_USE_LRA 0
+#endif
+
 const char* DEVICE_ID = ALARM_DEVICE_ID;
 const char* DEVICE_NAME = ALARM_DEVICE_NAME;
 
@@ -120,7 +124,7 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
-const unsigned long HAPTIC_RTP_PULSE_MS           = 140;
+const unsigned long HAPTIC_RTP_PULSE_MS           = 120;
 const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 220;
 const unsigned long DRV_RETRY_INTERVAL_MS         = 2000;
 
@@ -346,7 +350,11 @@ bool configureHapticDriver() {
   drv.stop();
   drv.setRealtimeValue(0);
   drv.setMode(DRV2605_MODE_INTTRIG);
+#if ALARM_HAPTIC_USE_LRA
+  drv.useLRA();
+#else
   drv.useERM();
+#endif
   drv.selectLibrary(1);
   drv.setWaveform(0, 1);
   drv.setWaveform(1, 0);
@@ -394,45 +402,84 @@ bool ensureHapticDriver() {
   return beginHapticDriver(false);
 }
 
-bool playHaptic(uint8_t effect) {
+uint8_t hapticEffectToWaveform(uint8_t effect) {
+  if (effect == 0) return 0;
+
+  // UI levels 1-10 are mapped to DRV2605 ROM effects that feel like
+  // distinct clicks/buzzes instead of raw motor power steps.
+  static const uint8_t waveformByLevel[] = {
+    0,   // unused
+    1,   // strong click
+    2,   // strong click 60%
+    3,   // strong click 30%
+    10,  // double click
+    14,  // strong buzz
+    17,  // buzz
+    47,  // ramp / transition
+    52,  // sharp transition
+    58,  // alert-style bump
+    64   // strong buzz alert
+  };
+
+  if (effect <= 10) {
+    return waveformByLevel[effect];
+  }
+
+  return constrain(effect, 1, 123);
+}
+
+bool triggerHapticWaveform(uint8_t waveform, bool waitForFinish) {
   if (!ensureHapticDriver()) {
     Serial.println("[HAPTIC] skipped, DRV=FAIL");
     return false;
   }
-  if (effect == 0) {
+  if (waveform == 0) {
     Serial.println("[HAPTIC] skipped, effect=0");
     return false;
   }
 
-  uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 80, 255);
   configureHapticDriver();
-  drv.useERM();
+  drv.stop();
+  drv.setMode(DRV2605_MODE_INTTRIG);
+  drv.setWaveform(0, waveform);
+  drv.setWaveform(1, 0);
+  drv.go();
+
+  if (waitForFinish) {
+    delay(HAPTIC_WAVEFORM_WAIT_MS);
+    drv.stop();
+  }
+
+  return true;
+}
+
+bool playHaptic(uint8_t effect) {
+  return triggerHapticWaveform(hapticEffectToWaveform(effect), false);
+}
+
+bool playHapticWaveform(uint8_t effect) {
+  return triggerHapticWaveform(hapticEffectToWaveform(effect), true);
+}
+
+bool playHapticRtpPulse(uint8_t effect) {
+  if (!ensureHapticDriver()) {
+    Serial.println("[HAPTIC] RTP skipped, DRV=FAIL");
+    return false;
+  }
+  if (effect == 0) {
+    Serial.println("[HAPTIC] RTP skipped, effect=0");
+    return false;
+  }
+
+  uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 90, 220);
+  configureHapticDriver();
   drv.stop();
   drv.setMode(DRV2605_MODE_REALTIME);
   drv.setRealtimeValue(drive);
   delay(HAPTIC_RTP_PULSE_MS);
   drv.setRealtimeValue(0);
-  drv.setMode(DRV2605_MODE_INTTRIG);
-  return true;
-}
-
-bool playHapticWaveform(uint8_t effect) {
-  if (!ensureHapticDriver()) {
-    Serial.println("[HAPTIC] waveform skipped, DRV=FAIL");
-    return false;
-  }
-  if (effect == 0) {
-    Serial.println("[HAPTIC] waveform skipped, effect=0");
-    return false;
-  }
-
-  configureHapticDriver();
-  drv.setMode(DRV2605_MODE_INTTRIG);
-  drv.setWaveform(0, effect);
-  drv.setWaveform(1, 0);
-  drv.go();
-  delay(HAPTIC_WAVEFORM_WAIT_MS);
   drv.stop();
+  drv.setMode(DRV2605_MODE_INTTRIG);
   return true;
 }
 
@@ -440,15 +487,15 @@ bool runHapticTestSequence(uint8_t effect) {
   uint8_t strongEffect = effect > 0 ? effect : 1;
   bool ok = false;
 
-  ok = playHaptic(1) || ok;
+  ok = playHapticWaveform(1) || ok;
   delay(120);
   ok = playHapticWaveform(strongEffect) || ok;
   delay(120);
   ok = playHapticWaveform(47) || ok;
   delay(120);
-  ok = playHaptic(10) || ok;
+  ok = playHapticWaveform(10) || ok;
   delay(120);
-  ok = playHaptic(7) || ok;
+  ok = playHapticRtpPulse(7) || ok;
 
   return ok;
 }
@@ -767,11 +814,6 @@ void runPatternCommand(JsonVariantConst doc) {
 
   Serial.print("[CMD] run_pattern ");
   Serial.println(command);
-
-  if (hapticMode != "off") {
-    playHaptic(1);
-    delay(120);
-  }
 
   for (int i = 0; i < count; i++) {
     bool phase = (i % 2) == 0;
