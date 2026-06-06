@@ -297,12 +297,22 @@ function formatDelta(deltaSec, language) {
 }
 
 function parseUsbJsonReply(reply, marker) {
-  const line = reply
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .find((item) => item.startsWith(marker));
+  const markerIndex = reply.indexOf(marker);
+  if (markerIndex < 0) return null;
+
+  const afterMarker = reply.slice(markerIndex + marker.length);
+  const line = afterMarker.split(/\r?\n/)[0].trim();
   if (!line) return null;
-  return JSON.parse(line.slice(marker.length).trim());
+  return JSON.parse(line);
+}
+
+function hasCompleteUsbReply(reply, matcher) {
+  const markerIndex = reply.indexOf(matcher);
+  if (markerIndex < 0) return false;
+  if (matcher === 'usb_config_json ') {
+    return /\r?\n/.test(reply.slice(markerIndex));
+  }
+  return true;
 }
 
 function delay(ms) {
@@ -323,6 +333,8 @@ export default function App() {
     detail: 'USB status is unknown until you connect from this browser.'
   });
   const serialPortRef = useRef(null);
+  const serialReaderRef = useRef(null);
+  const usbReadBufferRef = useRef('');
   const usbBusyRef = useRef(false);
 
   const jsonText = useMemo(() => toJson(config), [config]);
@@ -401,6 +413,7 @@ export default function App() {
       throw new Error('USB is not connected.');
     }
 
+    usbReadBufferRef.current = '';
     const writer = serialPortRef.current.writable.getWriter();
     try {
       await writer.write(new TextEncoder().encode(`${line}\n`));
@@ -409,28 +422,47 @@ export default function App() {
     }
   }
 
-  async function readUsbReply(matcher = 'codex_pong', timeoutMs = 1800) {
-    if (!serialPortRef.current || !serialPortRef.current.readable) return '';
-
-    const reader = serialPortRef.current.readable.getReader();
+  async function startUsbReader(port) {
+    if (!port.readable) return;
+    const reader = port.readable.getReader();
+    serialReaderRef.current = reader;
     const decoder = new TextDecoder();
-    let reply = '';
-    const timeoutId = setTimeout(() => {
-      reader.cancel().catch(() => {});
-    }, timeoutMs);
 
     try {
-      while (!reply.includes(matcher)) {
+      while (true) {
         const result = await reader.read();
         if (result.done) break;
-        if (result.value) reply += decoder.decode(result.value, { stream: true });
+        if (result.value) {
+          usbReadBufferRef.current += decoder.decode(result.value, { stream: true });
+          if (usbReadBufferRef.current.length > 12000) {
+            usbReadBufferRef.current = usbReadBufferRef.current.slice(-8000);
+          }
+        }
       }
+    } catch {
+      // Port closure is handled by the command that observes the failed read/write.
     } finally {
-      clearTimeout(timeoutId);
-      reader.releaseLock();
+      if (serialReaderRef.current === reader) {
+        serialReaderRef.current = null;
+      }
+      try {
+        reader.releaseLock();
+      } catch {
+        // Reader may already be released when the browser closes the port.
+      }
+    }
+  }
+
+  async function readUsbReply(matcher = 'codex_pong', timeoutMs = 1800) {
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+      const reply = usbReadBufferRef.current;
+      if (hasCompleteUsbReply(reply, matcher)) return reply.trim();
+      await delay(40);
     }
 
-    return reply.trim();
+    return usbReadBufferRef.current.trim();
   }
 
   async function connectUsb() {
@@ -448,8 +480,9 @@ export default function App() {
       const port = await navigator.serial.requestPort();
       await port.open({ baudRate: 115200 });
       serialPortRef.current = port;
+      startUsbReader(port);
 
-      await delay(900);
+      await delay(1200);
       await writeUsbLine('codex_ping');
       const reply = await readUsbReply('codex_pong');
       const connected = reply.includes('codex_pong');
