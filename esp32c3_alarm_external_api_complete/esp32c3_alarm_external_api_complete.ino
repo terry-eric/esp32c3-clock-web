@@ -121,6 +121,7 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
 const unsigned long HAPTIC_RTP_PULSE_MS           = 140;
+const unsigned long DRV_RETRY_INTERVAL_MS         = 2000;
 
 // ============================================================
 // Objects
@@ -178,6 +179,7 @@ unsigned long lastHeartbeatPrintMs = 0;
 
 unsigned long stateEnterMs = 0;
 unsigned long lastHapticMs = 0;
+unsigned long lastDrvInitAttemptMs = 0;
 
 int lastAlarmYday = -1;
 time_t snoozeUntil = 0;
@@ -192,6 +194,11 @@ bool codexDoneLight = false;
 bool isAllowedLocalCommand(const String& command);
 void stopAlarm();
 void snoozeAlarm();
+bool i2cScanHasDevice(uint8_t address);
+void scanI2CDevices();
+bool configureHapticDriver();
+bool beginHapticDriver(bool verbose);
+bool ensureHapticDriver();
 
 // Button debounce
 bool stableButtonNow = false;
@@ -332,15 +339,62 @@ void writePatternLight(const String& mode, bool phase, void (*writer)(bool)) {
   }
 }
 
-void configureHapticDriver() {
-  drv.useERM();
-  drv.selectLibrary(1);
+bool configureHapticDriver() {
+  if (!drvOK) return false;
+
+  drv.stop();
   drv.setRealtimeValue(0);
   drv.setMode(DRV2605_MODE_INTTRIG);
+  drv.useERM();
+  drv.selectLibrary(1);
+  drv.setWaveform(0, 1);
+  drv.setWaveform(1, 0);
+  drv.setRealtimeValue(0);
+  drv.setMode(DRV2605_MODE_INTTRIG);
+  return true;
+}
+
+bool beginHapticDriver(bool verbose) {
+  lastDrvInitAttemptMs = millis();
+
+  Wire.setPins(PIN_I2C_SDA, PIN_I2C_SCL);
+  Wire.begin();
+  Wire.setClock(100000);
+
+  if (verbose) {
+    scanI2CDevices();
+  }
+
+  if (!i2cScanHasDevice(0x5A)) {
+    drvOK = false;
+    if (verbose) {
+      Serial.println("[DRV2605L] 0x5A not found. Check SDA/SCL/VCC/GND.");
+    } else {
+      Serial.println("[DRV2605L] retry failed, 0x5A not found");
+    }
+    return false;
+  }
+
+  if (!drv.begin(&Wire)) {
+    drvOK = false;
+    Serial.println("[DRV2605L] begin() failed");
+    return false;
+  }
+
+  drvOK = true;
+  Serial.println(verbose ? "[DRV2605L] Found" : "[DRV2605L] Found after retry");
+  configureHapticDriver();
+  return true;
+}
+
+bool ensureHapticDriver() {
+  if (drvOK) return true;
+  if (millis() - lastDrvInitAttemptMs < DRV_RETRY_INTERVAL_MS) return false;
+  return beginHapticDriver(false);
 }
 
 bool playHaptic(uint8_t effect) {
-  if (!drvOK) {
+  if (!ensureHapticDriver()) {
     Serial.println("[HAPTIC] skipped, DRV=FAIL");
     return false;
   }
@@ -350,6 +404,7 @@ bool playHaptic(uint8_t effect) {
   }
 
   uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 80, 255);
+  configureHapticDriver();
   drv.useERM();
   drv.stop();
   drv.setMode(DRV2605_MODE_REALTIME);
@@ -532,28 +587,9 @@ void scanI2CDevices() {
 void initDRV2605L() {
   Serial.printf("[DRV2605L] Init SDA=GPIO%d, SCL=GPIO%d\n", PIN_I2C_SDA, PIN_I2C_SCL);
 
-  Wire.setPins(PIN_I2C_SDA, PIN_I2C_SCL);
-  Wire.begin();
-  Wire.setClock(100000);
-
-  scanI2CDevices();
-
-  if (!i2cScanHasDevice(0x5A)) {
-    drvOK = false;
-    Serial.println("[DRV2605L] 0x5A not found. Check SDA/SCL/VCC/GND.");
+  if (!beginHapticDriver(true)) {
     return;
   }
-
-  if (!drv.begin(&Wire)) {
-    drvOK = false;
-    Serial.println("[DRV2605L] begin() failed");
-    return;
-  }
-
-  drvOK = true;
-  Serial.println("[DRV2605L] Found");
-
-  configureHapticDriver();
 
   playHaptic(1);
 }
@@ -619,6 +655,8 @@ void clearCodexLight() {
 }
 
 void sendUsbConfigSnapshot() {
+  ensureHapticDriver();
+
   StaticJsonDocument<1024> doc;
   doc["enabled"] = alarmConfig.enabled;
   doc["hour"] = alarmConfig.hour;
