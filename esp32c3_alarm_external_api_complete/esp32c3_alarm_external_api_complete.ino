@@ -125,7 +125,7 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
 const unsigned long HAPTIC_RTP_PULSE_MS           = 150;
-const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 320;
+const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 520;
 const unsigned long DRV_RETRY_INTERVAL_MS         = 2000;
 
 // ============================================================
@@ -441,6 +441,20 @@ uint8_t hapticEffectToFollowUpWaveform(uint8_t effect, uint8_t slot) {
   return slot == 1 ? followUp1ByLevel[effect] : followUp2ByLevel[effect];
 }
 
+unsigned long hapticEffectWaitMs(uint8_t effect) {
+  if (effect <= 3) return 300;
+  if (effect == 4) return 420;
+  if (effect == 5) return 560;
+  if (effect == 6) return 900;
+  if (effect == 7) return 1120;
+  if (effect == 8) return 680;
+  if (effect == 9) return 900;
+  if (effect == 10) return 1100;
+  if (effect >= 14 && effect <= 17) return 1100;
+  if (effect >= 52 && effect <= 64) return 900;
+  return HAPTIC_WAVEFORM_WAIT_MS;
+}
+
 bool triggerHapticSequence(uint8_t effect, bool waitForFinish) {
   if (!ensureHapticDriver()) {
     Serial.println("[HAPTIC] skipped, DRV=FAIL");
@@ -466,7 +480,7 @@ bool triggerHapticSequence(uint8_t effect, bool waitForFinish) {
   drv.go();
 
   if (waitForFinish) {
-    delay(HAPTIC_WAVEFORM_WAIT_MS);
+    delay(hapticEffectWaitMs(effect));
     drv.stop();
   }
 
@@ -478,6 +492,10 @@ bool playHaptic(uint8_t effect) {
 }
 
 bool playHapticWaveform(uint8_t effect) {
+  return triggerHapticSequence(effect, true);
+}
+
+bool playCommandHaptic(uint8_t effect) {
   return triggerHapticSequence(effect, true);
 }
 
@@ -733,14 +751,14 @@ void runDoneNotification(int effectFromCommand) {
 
   int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
 
-  playHaptic(1);
+  playCommandHaptic(1);
   delay(120);
 
   for (int i = 0; i < 3; i++) {
     writeLedA(true);
     writeLedB(true);
     writeLedFlash(true);
-    playHaptic((uint8_t)effect);
+    playCommandHaptic((uint8_t)effect);
     delay(180);
 
     allLedOff();
@@ -842,7 +860,7 @@ void runPatternCommand(JsonVariantConst doc) {
     writePatternLight(flashMode, phase, writeLedFlash);
     bool pulseHaptic = hapticMode == "on" || ((hapticMode == "blink" || hapticMode == "toggle") && phase);
     if (pulseHaptic && effect > 0) {
-      didPatternHaptic = playHaptic((uint8_t)effect) || didPatternHaptic;
+      didPatternHaptic = playCommandHaptic((uint8_t)effect) || didPatternHaptic;
     }
     delay((unsigned long)intervalMs);
   }
@@ -853,7 +871,7 @@ void runPatternCommand(JsonVariantConst doc) {
   }
   applyCommandStatus(command, effect, !didPatternHaptic);
   if (command == "notify_done" && hapticMode != "off" && !didPatternHaptic && effect > 0) {
-    playHaptic((uint8_t)effect);
+    playCommandHaptic((uint8_t)effect);
   }
 }
 

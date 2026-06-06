@@ -74,7 +74,7 @@ def run_serial_command(port, command, read_reply=False, matcher="codex_pong", ti
         check=True,
         capture_output=True,
         text=True,
-        timeout=8,
+        timeout=max(8, int(timeout_ms / 1000) + 3),
     )
 
 
@@ -111,7 +111,7 @@ def notify_usb(port, state, effect):
     }
     command = commands[state]
     matcher = "usb_keepalive_ok" if state == "keepalive" else "usb_command_ok"
-    timeout_ms = 5000 if state == "done" else 2500
+    timeout_ms = 10000 if state == "done" else 2500
     result = run_serial_command(
         port,
         command,

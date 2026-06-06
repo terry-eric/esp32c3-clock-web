@@ -341,6 +341,33 @@ function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function estimateHapticWaitMs(effect) {
+  if (effect <= 0) return 0;
+  if (effect <= 3) return 300;
+  if (effect === 4) return 420;
+  if (effect === 5) return 560;
+  if (effect === 6) return 900;
+  if (effect === 7) return 1120;
+  if (effect === 8) return 680;
+  if (effect === 9) return 900;
+  if (effect === 10) return 1100;
+  return 520;
+}
+
+function estimatePatternTimeoutMs(body) {
+  const count = Math.max(1, Number(body.count) || 1);
+  const intervalMs = Math.max(50, Number(body.intervalMs) || 180);
+  const hapticOn = body.haptic !== 'off' && Number(body.hapticEffect) > 0;
+  const hapticPulses = !hapticOn
+    ? 0
+    : body.haptic === 'on'
+      ? count
+      : Math.ceil(count / 2);
+  const hapticMs = hapticPulses * estimateHapticWaitMs(Number(body.hapticEffect) || 0);
+  const testHapticMs = body.command === 'test_haptic' && hapticOn ? 4200 : 0;
+  return intervalMs * count + hapticMs + testHapticMs + 2500;
+}
+
 export default function App() {
   const [language, setLanguage] = useState(loadLanguage);
   const [config, setConfig] = useState(defaultConfig);
@@ -394,10 +421,7 @@ export default function App() {
 
     const intervalId = window.setInterval(() => {
       if (usbBusyRef.current) return;
-      withUsbBusy(async () => {
-        await writeUsbLine('usb_keepalive');
-        await expectUsbReply('usb_keepalive_ok', 1200);
-      }, { visible: false }).catch(async (error) => {
+      withUsbBusy(() => writeUsbLine('usb_keepalive'), { visible: false }).catch(async (error) => {
         await closeUsbPort();
         setUsbState((current) => ({
           ...current,
@@ -670,7 +694,7 @@ export default function App() {
           hapticEffect
         };
         await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
-        await expectUsbReply('usb_pattern_', body.intervalMs * body.count + 3000);
+        await expectUsbReply('usb_pattern_', estimatePatternTimeoutMs(body));
       });
       setUsbState((current) => ({
         ...current,
