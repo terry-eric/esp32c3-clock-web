@@ -532,6 +532,9 @@ export default function App() {
       setSelectedActionId(action.id);
       await withUsbBusy(async () => {
         await applyUsbConfig({ quiet: true, keepConnectedOnError: true });
+        const hapticEffect = action.pattern.haptic === 'off'
+          ? 0
+          : Math.max(1, config.hapticEffect);
         const body = {
           command: action.command,
           green: action.pattern.green,
@@ -540,7 +543,7 @@ export default function App() {
           haptic: action.pattern.haptic,
           intervalMs: action.pattern.intervalMs,
           count: action.pattern.count,
-          hapticEffect: config.hapticEffect
+          hapticEffect
         };
         await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
         await readUsbReply('usb_pattern_', body.intervalMs * body.count + 3000);
@@ -668,7 +671,7 @@ export default function App() {
       setUsbState((current) => ({
         ...current,
         label: 'Settings loaded',
-        detail: `LED ${nextConfig.ledPairBrightness}/10, Flash ${nextConfig.flashLedBrightness}/10, Haptic ${nextConfig.hapticEffect}/10`
+        detail: `LED ${nextConfig.ledPairBrightness}/10, Flash ${nextConfig.flashLedBrightness}/10, Haptic ${nextConfig.hapticEffect}/10, DRV ${body.drvOk === false ? 'FAIL' : 'OK'}`
       }));
       return true;
     } catch (error) {

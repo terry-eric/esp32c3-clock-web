@@ -331,13 +331,22 @@ void writePatternLight(const String& mode, bool phase, void (*writer)(bool)) {
   }
 }
 
-void playHaptic(uint8_t effect) {
-  if (!drvOK) return;
-  if (effect == 0) return;
+bool playHaptic(uint8_t effect) {
+  if (!drvOK) {
+    Serial.println("[HAPTIC] skipped, DRV=FAIL");
+    return false;
+  }
+  if (effect == 0) {
+    Serial.println("[HAPTIC] skipped, effect=0");
+    return false;
+  }
 
+  drv.setMode(DRV2605_MODE_INTTRIG);
+  drv.stop();
   drv.setWaveform(0, effect);
   drv.setWaveform(1, 0);
   drv.go();
+  return true;
 }
 
 bool isPressedRaw() {
@@ -617,6 +626,7 @@ void sendUsbConfigSnapshot() {
   doc["flashLedBrightness"] = alarmConfig.flashLedBrightness;
   doc["version"] = alarmConfig.version;
   doc["timeOk"] = timeOK;
+  doc["drvOk"] = drvOK;
   doc["epoch"] = timeOK ? (long)time(nullptr) : 0;
   doc["timeText"] = timeOK ? getTimeString() : "";
 
@@ -638,7 +648,7 @@ void applyCommandStatus(String command, int effectFromCommand, bool allowCommand
     lastAction = "VIBE_CODE_DONE";
   } else if (command == "test_haptic") {
     lastAction = "TEST_HAPTIC";
-    int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
+    int effect = effectFromCommand > 0 ? effectFromCommand : (alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1);
     if (allowCommandHaptic) {
       playHaptic((uint8_t)effect);
     }
@@ -732,7 +742,7 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
     runLedTest();
   } else if (command == "test_haptic") {
     lastAction = "TEST_HAPTIC";
-    int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
+    int effect = effectFromCommand > 0 ? effectFromCommand : (alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1);
     playHaptic((uint8_t)effect);
   } else if (command == "notify_done") {
     runDoneNotification(effectFromCommand);
