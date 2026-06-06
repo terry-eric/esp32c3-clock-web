@@ -371,6 +371,18 @@ void saveConfigToNVS() {
   prefs.end();
 }
 
+void clampAlarmConfig() {
+  alarmConfig.hour = constrain(alarmConfig.hour, 0, 23);
+  alarmConfig.minute = constrain(alarmConfig.minute, 0, 59);
+  alarmConfig.repeatMask = constrain(alarmConfig.repeatMask, 0, 127);
+  alarmConfig.prealertSec = constrain(alarmConfig.prealertSec, 0, 10);
+  alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 0, 10);
+  alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 1, 10);
+  alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 0, 10);
+  alarmConfig.ledPairBrightness = constrain(alarmConfig.ledPairBrightness, 0, 10);
+  alarmConfig.flashLedBrightness = constrain(alarmConfig.flashLedBrightness, 0, 10);
+}
+
 void loadConfigFromNVS() {
   prefs.begin("alarm", true);
   alarmConfig.enabled = prefs.getBool("enabled", true);
@@ -386,6 +398,7 @@ void loadConfigFromNVS() {
   alarmConfig.version = prefs.getInt("version", 0);
   lastCommandId = prefs.getInt("lastCmd", 0);
   prefs.end();
+  clampAlarmConfig();
 
   Serial.println("[NVS] Alarm config loaded");
   Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d lastCmd=%d\n",
@@ -762,15 +775,7 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   alarmConfig.flashLedBrightness = doc["flashLedBrightness"] | alarmConfig.flashLedBrightness;
   alarmConfig.version = incomingVersion;
 
-  alarmConfig.hour = constrain(alarmConfig.hour, 0, 23);
-  alarmConfig.minute = constrain(alarmConfig.minute, 0, 59);
-  alarmConfig.repeatMask = constrain(alarmConfig.repeatMask, 0, 127);
-  alarmConfig.prealertSec = constrain(alarmConfig.prealertSec, 0, 10);
-  alarmConfig.snoozeMin = constrain(alarmConfig.snoozeMin, 0, 10);
-  alarmConfig.maxRingSec = constrain(alarmConfig.maxRingSec, 0, 10);
-  alarmConfig.hapticEffect = constrain(alarmConfig.hapticEffect, 0, 10);
-  alarmConfig.ledPairBrightness = constrain(alarmConfig.ledPairBrightness, 0, 10);
-  alarmConfig.flashLedBrightness = constrain(alarmConfig.flashLedBrightness, 0, 10);
+  clampAlarmConfig();
 
   bool configChanged =
     previousEnabled != alarmConfig.enabled ||
@@ -789,11 +794,25 @@ bool applyConfigFromJson(JsonVariantConst doc) {
     previousLedPairBrightness != alarmConfig.ledPairBrightness ||
     previousFlashLedBrightness != alarmConfig.flashLedBrightness;
 
+  bool scheduleChanged =
+    previousEnabled != alarmConfig.enabled ||
+    previousHour != alarmConfig.hour ||
+    previousMinute != alarmConfig.minute ||
+    previousRepeatMask != alarmConfig.repeatMask;
+
   if (configChanged) {
     saveConfigToNVS();
     Serial.println("[NVS] Config changed, saved");
   } else {
     Serial.println("[NVS] Config unchanged, skipped save");
+  }
+
+  if (scheduleChanged) {
+    lastAlarmYday = -1;
+    if (stateNow == STATE_STOPPED || stateNow == STATE_SNOOZE) {
+      enterState(STATE_IDLE);
+    }
+    Serial.println("[ALARM] Schedule changed, today's trigger reset");
   }
 
   Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d\n",
@@ -1112,7 +1131,7 @@ void updateButton() {
 void updateLedPattern() {
   unsigned long nowMs = millis();
 
-  if (!usbTimeRecentlySynced()) {
+  if ((stateNow == STATE_IDLE || stateNow == STATE_TIME_INVALID || stateNow == STATE_BOOT) && !usbTimeRecentlySynced()) {
     writeStatusGreen(false);
     writeStatusRed((nowMs / 500) % 2);
     writeLedFlash(false);
