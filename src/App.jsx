@@ -188,6 +188,8 @@ const usbStatusText = {
   'Time sync failed': { en: 'Time sync failed', zh: '時間同步失敗' },
   'Settings saved': { en: 'Settings saved', zh: '設定已儲存' },
   'Settings sent': { en: 'Settings sent', zh: '設定已送出' },
+  'Settings loaded': { en: 'MCU settings loaded', zh: '已載入 MCU 設定' },
+  'Settings load failed': { en: 'MCU settings load failed', zh: 'MCU 設定載入失敗' },
   'Apply failed': { en: 'Apply failed', zh: '套用失敗' }
 };
 
@@ -466,7 +468,7 @@ export default function App() {
           } catch {
             // Still load persisted MCU settings so the UI matches the device after connect.
           }
-          await loadUsbConfig();
+          await loadUsbConfig({ required: true });
         });
       }
     } catch (error) {
@@ -569,17 +571,39 @@ export default function App() {
     }
   }
 
-  async function loadUsbConfig() {
+  async function requestUsbConfigSnapshot() {
+    await writeUsbLine('get_config');
+    const reply = await readUsbReply('usb_config_json ', 3500);
+    const body = parseUsbJsonReply(reply, 'usb_config_json ');
+    if (!body) {
+      throw new Error(reply || 'No usb_config_json reply.');
+    }
+    const requiredNumbers = ['hapticEffect', 'ledPairBrightness', 'flashLedBrightness'];
+    const missing = requiredNumbers.filter((key) => !Number.isFinite(Number(body[key])));
+    if (missing.length > 0) {
+      throw new Error(`MCU config missing ${missing.join(', ')}.`);
+    }
+    return body;
+  }
+
+  async function loadUsbConfig(options = {}) {
     try {
-      await writeUsbLine('get_config');
-      const reply = await readUsbReply('usb_config_json ', 1800);
-      const body = parseUsbJsonReply(reply, 'usb_config_json ');
-      if (!body) return;
+      let body = null;
+      let lastError = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          body = await requestUsbConfigSnapshot();
+          break;
+        } catch (error) {
+          lastError = error;
+          await delay(160);
+        }
+      }
+      if (!body) throw lastError || new Error('MCU config was not loaded.');
+
       const pcEpoch = Math.floor(Date.now() / 1000);
       const mcuEpoch = Math.max(0, Number(body.epoch) || 0);
-
-      setConfig((current) => ({
-        ...current,
+      const nextConfig = {
         enabled: Boolean(body.enabled),
         hour: clampHour(Number(body.hour)),
         minute: clampMinute(Number(body.minute)),
@@ -589,7 +613,12 @@ export default function App() {
         maxRingSec: clampZeroToTen(Number(body.maxRingSec)),
         hapticEffect: clampZeroToTen(Number(body.hapticEffect)),
         ledPairBrightness: clampZeroToTen(Number(body.ledPairBrightness)),
-        flashLedBrightness: clampZeroToTen(Number(body.flashLedBrightness)),
+        flashLedBrightness: clampZeroToTen(Number(body.flashLedBrightness))
+      };
+
+      setConfig((current) => ({
+        ...current,
+        ...nextConfig,
         version: Number(body.version) || current.version
       }));
       setTimeCompare({
@@ -599,10 +628,15 @@ export default function App() {
         mcuText: typeof body.timeText === 'string' ? body.timeText : '',
         pcText: formatEpoch(pcEpoch)
       });
+      setUsbState((current) => ({
+        ...current,
+        label: 'Settings loaded',
+        detail: `LED ${nextConfig.ledPairBrightness}/10, Flash ${nextConfig.flashLedBrightness}/10, Haptic ${nextConfig.hapticEffect}/10`
+      }));
     } catch (error) {
       setUsbState((current) => ({
         ...current,
-        label: 'Connected',
+        label: options.required ? 'Settings load failed' : 'Connected',
         detail: error.message
       }));
     }

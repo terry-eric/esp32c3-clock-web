@@ -591,7 +591,7 @@ void clearCodexLight() {
 }
 
 void sendUsbConfigSnapshot() {
-  StaticJsonDocument<640> doc;
+  StaticJsonDocument<1024> doc;
   doc["enabled"] = alarmConfig.enabled;
   doc["hour"] = alarmConfig.hour;
   doc["minute"] = alarmConfig.minute;
