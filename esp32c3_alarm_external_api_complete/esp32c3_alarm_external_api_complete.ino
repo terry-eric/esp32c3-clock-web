@@ -121,6 +121,7 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
 const unsigned long HAPTIC_RTP_PULSE_MS           = 140;
+const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 220;
 const unsigned long DRV_RETRY_INTERVAL_MS         = 2000;
 
 // ============================================================
@@ -415,6 +416,43 @@ bool playHaptic(uint8_t effect) {
   return true;
 }
 
+bool playHapticWaveform(uint8_t effect) {
+  if (!ensureHapticDriver()) {
+    Serial.println("[HAPTIC] waveform skipped, DRV=FAIL");
+    return false;
+  }
+  if (effect == 0) {
+    Serial.println("[HAPTIC] waveform skipped, effect=0");
+    return false;
+  }
+
+  configureHapticDriver();
+  drv.setMode(DRV2605_MODE_INTTRIG);
+  drv.setWaveform(0, effect);
+  drv.setWaveform(1, 0);
+  drv.go();
+  delay(HAPTIC_WAVEFORM_WAIT_MS);
+  drv.stop();
+  return true;
+}
+
+bool runHapticTestSequence(uint8_t effect) {
+  uint8_t strongEffect = effect > 0 ? effect : 1;
+  bool ok = false;
+
+  ok = playHaptic(1) || ok;
+  delay(120);
+  ok = playHapticWaveform(strongEffect) || ok;
+  delay(120);
+  ok = playHapticWaveform(47) || ok;
+  delay(120);
+  ok = playHaptic(10) || ok;
+  delay(120);
+  ok = playHaptic(7) || ok;
+
+  return ok;
+}
+
 bool isPressedRaw() {
   int v = digitalRead(PIN_TOUCH);
 
@@ -628,6 +666,9 @@ void runDoneNotification(int effectFromCommand) {
 
   int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
 
+  playHaptic(1);
+  delay(120);
+
   for (int i = 0; i < 3; i++) {
     writeLedA(true);
     writeLedB(true);
@@ -695,7 +736,7 @@ void applyCommandStatus(String command, int effectFromCommand, bool allowCommand
     lastAction = "TEST_HAPTIC";
     int effect = effectFromCommand > 0 ? effectFromCommand : (alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1);
     if (allowCommandHaptic) {
-      playHaptic((uint8_t)effect);
+      runHapticTestSequence((uint8_t)effect);
     }
   } else if (command == "stop_alarm") {
     stopAlarm();
@@ -727,6 +768,11 @@ void runPatternCommand(JsonVariantConst doc) {
   Serial.print("[CMD] run_pattern ");
   Serial.println(command);
 
+  if (hapticMode != "off") {
+    playHaptic(1);
+    delay(120);
+  }
+
   for (int i = 0; i < count; i++) {
     bool phase = (i % 2) == 0;
     writePatternLight(greenMode, phase, writeStatusGreen);
@@ -734,13 +780,15 @@ void runPatternCommand(JsonVariantConst doc) {
     writePatternLight(flashMode, phase, writeLedFlash);
     bool pulseHaptic = hapticMode == "on" || ((hapticMode == "blink" || hapticMode == "toggle") && phase);
     if (pulseHaptic && effect > 0) {
-      didPatternHaptic = true;
-      playHaptic((uint8_t)effect);
+      didPatternHaptic = playHaptic((uint8_t)effect) || didPatternHaptic;
     }
     delay((unsigned long)intervalMs);
   }
 
   allLedOff();
+  if (command == "test_haptic" && hapticMode != "off" && effect > 0) {
+    didPatternHaptic = runHapticTestSequence((uint8_t)effect) || didPatternHaptic;
+  }
   applyCommandStatus(command, effect, !didPatternHaptic);
   if (command == "notify_done" && hapticMode != "off" && !didPatternHaptic && effect > 0) {
     playHaptic((uint8_t)effect);
@@ -788,7 +836,7 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
   } else if (command == "test_haptic") {
     lastAction = "TEST_HAPTIC";
     int effect = effectFromCommand > 0 ? effectFromCommand : (alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1);
-    playHaptic((uint8_t)effect);
+    runHapticTestSequence((uint8_t)effect);
   } else if (command == "notify_done") {
     runDoneNotification(effectFromCommand);
   } else if (command == "codex_busy") {
