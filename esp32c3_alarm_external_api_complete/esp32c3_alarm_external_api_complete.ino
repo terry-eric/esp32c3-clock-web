@@ -665,6 +665,9 @@ void runPatternCommand(JsonVariantConst doc) {
   if (hapticMode == "") {
     hapticMode = (command == "notify_done" || command == "test_haptic") ? "on" : "off";
   }
+  if (hapticMode != "off" && effect == 0) {
+    effect = alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1;
+  }
 
   Serial.print("[CMD] run_pattern ");
   Serial.println(command);
@@ -684,6 +687,9 @@ void runPatternCommand(JsonVariantConst doc) {
 
   allLedOff();
   applyCommandStatus(command, effect, !didPatternHaptic);
+  if (command == "notify_done" && hapticMode != "off" && !didPatternHaptic && effect > 0) {
+    playHaptic((uint8_t)effect);
+  }
 }
 
 void stopAlarm() {
