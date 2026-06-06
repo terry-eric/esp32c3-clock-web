@@ -14,6 +14,14 @@ const defaultConfig = {
   version: 1
 };
 
+const defaultTimeCompare = {
+  mcuEpoch: 0,
+  pcEpoch: 0,
+  deltaSec: null,
+  mcuText: '',
+  pcText: ''
+};
+
 const days = [
   [{ en: 'Sun', zh: '日' }, 0],
   [{ en: 'Mon', zh: '一' }, 1],
@@ -95,10 +103,14 @@ const text = {
     apply: 'Apply',
     usbCommand: 'USB command',
     appliesFirst: 'Applies settings first',
-    editCommands: 'Edit command buttons',
     commandPattern: 'Command light pattern',
     commandBehavior: 'USB command behavior',
     payload: 'USB Config Payload',
+    mcuTime: 'MCU time',
+    computerTime: 'Computer time',
+    timeDelta: 'Time delta',
+    timeUnknown: 'Unknown',
+    timeMatched: 'Matched',
     greenLed: 'Green',
     redLed: 'Red',
     flashLedShort: 'Flash',
@@ -132,10 +144,14 @@ const text = {
     apply: '套用',
     usbCommand: 'USB 指令',
     appliesFirst: '會先套用設定',
-    editCommands: '編輯指令按鈕',
     commandPattern: '指令燈號調整',
     commandBehavior: 'USB 指令行為',
     payload: 'USB 設定內容',
+    mcuTime: 'MCU 時間',
+    computerTime: '電腦時間',
+    timeDelta: '時間差',
+    timeUnknown: '未知',
+    timeMatched: '已同步',
     greenLed: '綠燈',
     redLed: '紅燈',
     flashLedShort: 'Flash LED',
@@ -267,6 +283,17 @@ function formatTime(config) {
   return `${String(config.hour).padStart(2, '0')}:${String(config.minute).padStart(2, '0')}`;
 }
 
+function formatEpoch(epoch) {
+  if (!epoch) return '';
+  return new Date(epoch * 1000).toLocaleString();
+}
+
+function formatDelta(deltaSec, language) {
+  if (!Number.isFinite(deltaSec)) return text[language].timeUnknown;
+  if (Math.abs(deltaSec) <= 2) return text[language].timeMatched;
+  return `${deltaSec > 0 ? '+' : ''}${deltaSec}s`;
+}
+
 function parseUsbJsonReply(reply, marker) {
   const line = reply
     .split(/\r?\n/)
@@ -283,6 +310,7 @@ function delay(ms) {
 export default function App() {
   const [language, setLanguage] = useState(loadLanguage);
   const [config, setConfig] = useState(defaultConfig);
+  const [timeCompare, setTimeCompare] = useState(defaultTimeCompare);
   const [commandActions, setCommandActions] = useState(loadCommandActions);
   const [selectedActionId, setSelectedActionId] = useState(defaultCommandActions[0].id);
   const [usbState, setUsbState] = useState({
@@ -424,12 +452,6 @@ export default function App() {
     }
   }
 
-  function updateCommandAction(id, patch) {
-    setCommandActions((current) =>
-      current.map((action) => (action.id === id ? { ...action, ...patch } : action))
-    );
-  }
-
   function updateCommandPattern(id, patch) {
     setCommandActions((current) =>
       current.map((action) =>
@@ -491,12 +513,19 @@ export default function App() {
     }
   }
 
+  async function syncAndLoadUsbTime() {
+    await syncUsbTime();
+    await loadUsbConfig();
+  }
+
   async function loadUsbConfig() {
     try {
       await writeUsbLine('get_config');
       const reply = await readUsbReply('usb_config_json ', 1800);
       const body = parseUsbJsonReply(reply, 'usb_config_json ');
       if (!body) return;
+      const pcEpoch = Math.floor(Date.now() / 1000);
+      const mcuEpoch = Math.max(0, Number(body.epoch) || 0);
 
       setConfig((current) => ({
         ...current,
@@ -512,6 +541,13 @@ export default function App() {
         flashLedBrightness: clampZeroToTen(Number(body.flashLedBrightness)),
         version: Number(body.version) || current.version
       }));
+      setTimeCompare({
+        mcuEpoch,
+        pcEpoch,
+        deltaSec: mcuEpoch > 0 ? mcuEpoch - pcEpoch : null,
+        mcuText: typeof body.timeText === 'string' ? body.timeText : '',
+        pcText: formatEpoch(pcEpoch)
+      });
     } catch (error) {
       setUsbState((current) => ({
         ...current,
@@ -653,13 +689,18 @@ export default function App() {
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       {t.connect}
                     </button>
-                    <button type="button" onClick={syncUsbTime} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
                       {t.time}
                     </button>
                     <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
                       {t.apply}
                     </button>
                   </div>
+                </div>
+                <div className="mt-3 grid gap-2 border-t border-stone-200 pt-3 text-sm sm:grid-cols-3">
+                  <TimeCompareItem label={t.mcuTime} value={timeCompare.mcuText || formatEpoch(timeCompare.mcuEpoch) || t.timeUnknown} />
+                  <TimeCompareItem label={t.computerTime} value={timeCompare.pcText || t.timeUnknown} />
+                  <TimeCompareItem label={t.timeDelta} value={formatDelta(timeCompare.deltaSec, language)} strong />
                 </div>
               </div>
 
@@ -685,39 +726,6 @@ export default function App() {
                     >
                       {action.labels[language]}
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-md border border-stone-300 bg-white p-4">
-                <FieldLabel>{t.editCommands}</FieldLabel>
-                <div className="space-y-2">
-                  {commandActions.map((action) => (
-                    <div key={action.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_150px]">
-                      <input
-                        type="text"
-                        value={action.labels[language]}
-                        onFocus={() => setSelectedActionId(action.id)}
-                        onChange={(event) =>
-                          updateCommandAction(action.id, {
-                            labels: { ...action.labels, [language]: event.target.value }
-                          })
-                        }
-                        className="h-10 min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
-                      />
-                      <select
-                        value={action.command}
-                        onFocus={() => setSelectedActionId(action.id)}
-                        onChange={(event) => updateCommandAction(action.id, { command: event.target.value })}
-                        className="h-10 min-w-0 rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
-                      >
-                        {editableCommandChoices.map((command) => (
-                          <option key={command} value={command}>
-                            {command}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
                   ))}
                 </div>
               </div>
@@ -790,6 +798,15 @@ function StatusPill({ label, value, active = false }) {
     <div className={`rounded-md border px-3 py-2 ${active ? 'border-teal-700 bg-teal-700 text-white' : 'border-stone-300 bg-white text-stone-700'}`}>
       <div className="text-[11px] font-semibold uppercase tracking-[0.12em] opacity-75">{label}</div>
       <div className="mt-1 truncate text-sm font-semibold">{value}</div>
+    </div>
+  );
+}
+
+function TimeCompareItem({ label, value, strong = false }) {
+  return (
+    <div className="min-w-0 rounded-md border border-stone-200 bg-stone-50 px-3 py-2">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-stone-500">{label}</div>
+      <div className={`mt-1 truncate text-sm tabular-nums ${strong ? 'font-semibold text-teal-700' : 'text-stone-700'}`}>{value}</div>
     </div>
   );
 }

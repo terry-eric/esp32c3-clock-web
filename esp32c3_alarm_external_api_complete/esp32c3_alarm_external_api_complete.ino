@@ -591,7 +591,7 @@ void clearCodexLight() {
 }
 
 void sendUsbConfigSnapshot() {
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<640> doc;
   doc["enabled"] = alarmConfig.enabled;
   doc["hour"] = alarmConfig.hour;
   doc["minute"] = alarmConfig.minute;
@@ -604,6 +604,8 @@ void sendUsbConfigSnapshot() {
   doc["flashLedBrightness"] = alarmConfig.flashLedBrightness;
   doc["version"] = alarmConfig.version;
   doc["timeOk"] = timeOK;
+  doc["epoch"] = timeOK ? (long)time(nullptr) : 0;
+  doc["timeText"] = timeOK ? getTimeString() : "";
 
   Serial.print("usb_config_json ");
   serializeJson(doc, Serial);
