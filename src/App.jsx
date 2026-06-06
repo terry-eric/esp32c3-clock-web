@@ -866,7 +866,7 @@ export default function App() {
       </header>
 
       <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-5">
           <Panel title={t.alarm}>
             <div className="grid gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
               <div>
@@ -925,12 +925,12 @@ export default function App() {
           </Panel>
         </section>
 
-        <aside className="space-y-5">
+        <aside className="min-w-0 space-y-5">
           <Panel title={t.notify}>
             <div className="grid gap-3">
-              <div className="rounded-md border border-stone-300 bg-white p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
+              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
+                <div className="flex min-w-0 flex-col gap-3">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className={`h-2.5 w-2.5 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
                       <div className="text-sm font-semibold">USB {localizeUsbStatus(usbState.label, language)}</div>
@@ -941,7 +941,7 @@ export default function App() {
                       </div>
                     ) : null}
                   </div>
-                  <div className="grid grid-cols-3 gap-2 sm:w-[315px]">
+                  <div className="grid min-w-0 grid-cols-3 gap-2">
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       {t.connect}
                     </button>
@@ -960,12 +960,12 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-md border border-stone-300 bg-white p-4">
+              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
                 <div className="flex items-center justify-between gap-3">
                   <FieldLabel>{t.usbCommand}</FieldLabel>
                   <span className="text-xs font-semibold text-teal-700">{t.appliesFirst}</span>
                 </div>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
                   {commandActions.map((action) => (
                     <button
                       key={action.id}
@@ -986,9 +986,9 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-md border border-stone-300 bg-white p-4">
+              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
                 <FieldLabel>{t.commandPattern}: {selectedAction.labels[language]}</FieldLabel>
-                <div className="grid gap-3 sm:grid-cols-4">
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
                   <PatternSelect label={t.greenLed} value={selectedAction.pattern.green} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { green: value })} />
                   <PatternSelect label={t.redLed} value={selectedAction.pattern.red} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { red: value })} />
                   <PatternSelect label={t.flashLedShort} value={selectedAction.pattern.flash} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { flash: value })} />
@@ -1012,13 +1012,13 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="rounded-md border border-stone-300 bg-white p-4">
+              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
                 <FieldLabel>{t.commandBehavior}</FieldLabel>
                 <div className="divide-y divide-stone-200">
                   {usbCommandCatalog.map(([command, behavior]) => (
-                    <div key={command} className="grid gap-1 py-2 sm:grid-cols-[120px_minmax(0,1fr)]">
-                      <code className="text-xs font-semibold text-teal-700">{command}</code>
-                      <div className="text-xs leading-5 text-stone-600">{behavior[language]}</div>
+                    <div key={command} className="grid min-w-0 gap-1 py-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+                      <code className="min-w-0 text-xs font-semibold text-teal-700">{command}</code>
+                      <div className="min-w-0 text-xs leading-5 text-stone-600">{behavior[language]}</div>
                     </div>
                   ))}
                 </div>
@@ -1039,9 +1039,9 @@ export default function App() {
 
 function Panel({ title, children }) {
   return (
-    <section className="rounded-md border border-stone-300 bg-[#fbfbf7] p-5 shadow-sm">
+    <section className="min-w-0 rounded-md border border-stone-300 bg-[#fbfbf7] p-5 shadow-sm">
       <h2 className="text-base font-semibold">{title}</h2>
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 min-w-0">{children}</div>
     </section>
   );
 }
@@ -1120,12 +1120,12 @@ function NumberCell({ value, min, max, ariaLabel, onChange }) {
 
 function PatternSelect({ label, value, language, onChange }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <FieldLabel>{label}</FieldLabel>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
+        className="h-10 w-full min-w-0 rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
       >
         {lightModeChoices.map((mode) => (
           <option key={mode} value={mode}>
@@ -1139,12 +1139,12 @@ function PatternSelect({ label, value, language, onChange }) {
 
 function HapticSelect({ label, value, language, onChange }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <FieldLabel>{label}</FieldLabel>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="h-10 w-full rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
+        className="h-10 w-full min-w-0 rounded-md border border-stone-300 bg-white px-2 text-sm outline-none focus:border-teal-600"
       >
         {hapticModeChoices.map((mode) => (
           <option key={mode} value={mode}>
@@ -1158,7 +1158,7 @@ function HapticSelect({ label, value, language, onChange }) {
 
 function NumberField({ label, min, max, value, onChange }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <FieldLabel>{label}</FieldLabel>
       <input
         type="number"
@@ -1166,7 +1166,7 @@ function NumberField({ label, min, max, value, onChange }) {
         max={max}
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
-        className="h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
+        className="h-10 w-full min-w-0 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-teal-600"
       />
     </label>
   );
@@ -1174,7 +1174,7 @@ function NumberField({ label, min, max, value, onChange }) {
 
 function RangeField({ label, unit, value, onChange }) {
   return (
-    <label className="block rounded-md border border-stone-300 bg-white p-3">
+    <label className="block min-w-0 rounded-md border border-stone-300 bg-white p-3">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
         <FieldLabel>{label}</FieldLabel>
         <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
