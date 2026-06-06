@@ -110,8 +110,19 @@ def notify_usb(port, state, effect):
         "keepalive": "usb_keepalive",
     }
     command = commands[state]
-    run_serial_command(port, command)
-    print(f"MCU notified by USB serial: {port} -> {command}")
+    matcher = "usb_keepalive_ok" if state == "keepalive" else "usb_command_ok"
+    timeout_ms = 5000 if state == "done" else 2500
+    result = run_serial_command(
+        port,
+        command,
+        read_reply=True,
+        matcher=matcher,
+        timeout_ms=timeout_ms,
+    )
+    reply = " ".join((result.stdout or "").split())
+    if matcher not in reply:
+        raise RuntimeError(f"notification was not acknowledged: {reply or 'no reply'}")
+    print(f"MCU notified by USB serial: {port} -> {command} ({reply})")
 
 
 def find_mcu_port(preferred_port):

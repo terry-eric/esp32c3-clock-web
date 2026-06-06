@@ -40,6 +40,18 @@ usb_time_ok
 usb_time_rejected
 ```
 
+`usb_keepalive` returns:
+
+```text
+usb_keepalive_ok
+```
+
+Direct local commands such as `codex_busy` and `notify_done 10` return this after the command finishes:
+
+```text
+usb_command_ok notify_done
+```
+
 The web console uses Web Serial in Chrome or Edge to send the same commands. It sends `set_time` on connect, then reads `get_config` and uses the MCU values as the page defaults. Once per hour, it sends `set_time` again and reads `get_config` again to confirm the MCU-side state.
 
 The local notifier can sync time without the web console:

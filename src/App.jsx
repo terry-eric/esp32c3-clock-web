@@ -394,7 +394,11 @@ export default function App() {
 
     const intervalId = window.setInterval(() => {
       if (usbBusyRef.current) return;
-      withUsbBusy(() => writeUsbLine('usb_keepalive'), { visible: false }).catch((error) => {
+      withUsbBusy(async () => {
+        await writeUsbLine('usb_keepalive');
+        await expectUsbReply('usb_keepalive_ok', 1200);
+      }, { visible: false }).catch(async (error) => {
+        await closeUsbPort();
         setUsbState((current) => ({
           ...current,
           connected: false,
@@ -406,6 +410,24 @@ export default function App() {
 
     return () => window.clearInterval(intervalId);
   }, [usbState.connected]);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serial' in navigator)) return undefined;
+
+    const handleDisconnect = async (event) => {
+      if (event.target !== serialPortRef.current) return;
+      await closeUsbPort();
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Disconnected',
+        detail: 'USB serial device was disconnected.'
+      }));
+    };
+
+    navigator.serial.addEventListener('disconnect', handleDisconnect);
+    return () => navigator.serial.removeEventListener('disconnect', handleDisconnect);
+  }, []);
 
   function bumpVersion(patch = {}) {
     setConfig((current) => ({
@@ -437,10 +459,24 @@ export default function App() {
 
     usbReadBufferRef.current = '';
     const writer = serialPortRef.current.writable.getWriter();
+    let writeError = null;
     try {
       await writer.write(new TextEncoder().encode(`${line}\n`));
+    } catch (error) {
+      writeError = error;
     } finally {
       writer.releaseLock();
+    }
+
+    if (writeError) {
+      await closeUsbPort();
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Disconnected',
+        detail: writeError.message
+      }));
+      throw writeError;
     }
   }
 
@@ -487,6 +523,75 @@ export default function App() {
     return usbReadBufferRef.current.trim();
   }
 
+  async function expectUsbReply(matcher = 'codex_pong', timeoutMs = 1800) {
+    const reply = await readUsbReply(matcher, timeoutMs);
+    if (!hasCompleteUsbReply(reply, matcher)) {
+      throw new Error(reply || `No ${matcher} reply from MCU.`);
+    }
+    return reply;
+  }
+
+  async function closeUsbPort() {
+    const reader = serialReaderRef.current;
+    serialReaderRef.current = null;
+    if (reader) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The browser may have already released the reader after unplug/reload.
+      }
+      await delay(80);
+    }
+
+    const port = serialPortRef.current;
+    serialPortRef.current = null;
+    usbReadBufferRef.current = '';
+    if (port) {
+      try {
+        await port.close();
+      } catch {
+        // Closing an already-closed Web Serial port is harmless.
+      }
+    }
+  }
+
+  async function openUsbPortAndPing(port) {
+    await port.open({ baudRate: 115200 });
+    serialPortRef.current = port;
+    startUsbReader(port);
+
+    await delay(1200);
+    await writeUsbLine('codex_ping');
+    const reply = await expectUsbReply('codex_pong', 2200);
+    return reply;
+  }
+
+  async function connectToUsbMcu() {
+    const rememberedPorts = await navigator.serial.getPorts();
+    let lastError = null;
+
+    for (const port of rememberedPorts) {
+      try {
+        const reply = await openUsbPortAndPing(port);
+        return { port, reply };
+      } catch (error) {
+        lastError = error;
+        await closeUsbPort();
+      }
+    }
+
+    const port = await navigator.serial.requestPort();
+    try {
+      const reply = await openUsbPortAndPing(port);
+      return { port, reply };
+    } catch (error) {
+      lastError = error;
+      await closeUsbPort();
+    }
+
+    throw lastError || new Error('No Codex MCU replied on USB serial.');
+  }
+
   async function connectUsb() {
     if (!usbState.supported) {
       setUsbState((current) => ({
@@ -499,35 +604,34 @@ export default function App() {
     }
 
     try {
-      const port = await navigator.serial.requestPort();
-      await port.open({ baudRate: 115200 });
-      serialPortRef.current = port;
-      startUsbReader(port);
+      await closeUsbPort();
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Not connected',
+        detail: 'Opening USB serial port...'
+      }));
 
-      await delay(1200);
-      await writeUsbLine('codex_ping');
-      const reply = await readUsbReply('codex_pong');
-      const connected = reply.includes('codex_pong');
+      const { reply } = await connectToUsbMcu();
 
       setUsbState({
-        connected,
+        connected: true,
         supported: true,
-        label: connected ? 'Connected' : 'Opened, no MCU reply',
-        detail: connected ? reply.replace(/\s+/g, ' ') : 'Port opened, but no codex_pong was received.'
+        label: 'Connected',
+        detail: reply.replace(/\s+/g, ' ')
       });
 
-      if (connected) {
-        await withUsbBusy(async () => {
-          try {
-            await syncUsbTime({ keepConnectedOnError: true });
-          } catch {
-            // Still load persisted MCU settings so the UI matches the device after connect.
-          }
-          await delay(600);
-          await loadUsbConfig({ required: true });
-        });
-      }
+      await withUsbBusy(async () => {
+        try {
+          await syncUsbTime({ keepConnectedOnError: true });
+        } catch {
+          // Still load persisted MCU settings so the UI matches the device after connect.
+        }
+        await delay(600);
+        await loadUsbConfig({ required: true });
+      });
     } catch (error) {
+      await closeUsbPort();
       setUsbState((current) => ({
         ...current,
         connected: false,
@@ -566,7 +670,7 @@ export default function App() {
           hapticEffect
         };
         await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
-        await readUsbReply('usb_pattern_', body.intervalMs * body.count + 3000);
+        await expectUsbReply('usb_pattern_', body.intervalMs * body.count + 3000);
       });
       setUsbState((current) => ({
         ...current,
@@ -585,7 +689,7 @@ export default function App() {
     try {
       const epochSeconds = Math.floor(Date.now() / 1000);
       await writeUsbLine(`set_time ${epochSeconds}`);
-      const reply = await readUsbReply('usb_time_', 1800);
+      const reply = await expectUsbReply('usb_time_', 1800);
       if (!options.quiet) {
         setUsbState((current) => ({
           ...current,
@@ -719,7 +823,7 @@ export default function App() {
         flashLedBrightness: config.flashLedBrightness
       };
       await writeUsbLine(`set_config ${JSON.stringify(body)}`);
-      const reply = await readUsbReply('usb_config_', 1800);
+      const reply = await expectUsbReply('usb_config_', 1800);
       if (!options.quiet) {
         setUsbState((current) => ({
           ...current,

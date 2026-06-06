@@ -1046,6 +1046,7 @@ void handleUsbCommandLine(String line) {
   }
 
   if (command == "usb_keepalive") {
+    Serial.println("usb_keepalive_ok");
     return;
   }
 
@@ -1116,6 +1117,8 @@ void handleUsbCommandLine(String line) {
   Serial.print("[USB] Command: ");
   Serial.println(command);
   executeCommand(lastCommandId + 1, command, effect);
+  Serial.print("usb_command_ok ");
+  Serial.println(command);
 }
 
 void maintainUsbCommands() {
