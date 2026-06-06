@@ -124,8 +124,8 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
-const unsigned long HAPTIC_RTP_PULSE_MS           = 120;
-const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 220;
+const unsigned long HAPTIC_RTP_PULSE_MS           = 150;
+const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 320;
 const unsigned long DRV_RETRY_INTERVAL_MS         = 2000;
 
 // ============================================================
@@ -406,19 +406,19 @@ uint8_t hapticEffectToWaveform(uint8_t effect) {
   if (effect == 0) return 0;
 
   // UI levels 1-10 are mapped to DRV2605 ROM effects that feel like
-  // distinct clicks/buzzes instead of raw motor power steps.
+  // stronger notification clicks/buzzes instead of raw motor power steps.
   static const uint8_t waveformByLevel[] = {
     0,   // unused
-    1,   // strong click
-    2,   // strong click 60%
-    3,   // strong click 30%
-    10,  // double click
+    4,   // sharp click 100%
+    1,   // strong click 100%
+    10,  // double click 100%
+    12,  // triple click 100%
     14,  // strong buzz
-    17,  // buzz
-    47,  // ramp / transition
-    52,  // sharp transition
-    58,  // alert-style bump
-    64   // strong buzz alert
+    15,  // 750 ms alert
+    16,  // 1000 ms alert
+    47,  // buzz / transition
+    52,  // pulsing strong
+    64   // strong notification buzz
   };
 
   if (effect <= 10) {
@@ -428,21 +428,41 @@ uint8_t hapticEffectToWaveform(uint8_t effect) {
   return constrain(effect, 1, 123);
 }
 
-bool triggerHapticWaveform(uint8_t waveform, bool waitForFinish) {
+uint8_t hapticEffectToFollowUpWaveform(uint8_t effect, uint8_t slot) {
+  if (effect > 10 || slot == 0) return 0;
+
+  static const uint8_t followUp1ByLevel[] = {
+    0, 0, 0, 0, 4, 1, 1, 14, 14, 15, 16
+  };
+  static const uint8_t followUp2ByLevel[] = {
+    0, 0, 0, 0, 0, 0, 4, 1, 1, 14, 14
+  };
+
+  return slot == 1 ? followUp1ByLevel[effect] : followUp2ByLevel[effect];
+}
+
+bool triggerHapticSequence(uint8_t effect, bool waitForFinish) {
   if (!ensureHapticDriver()) {
     Serial.println("[HAPTIC] skipped, DRV=FAIL");
     return false;
   }
+
+  uint8_t waveform = hapticEffectToWaveform(effect);
   if (waveform == 0) {
     Serial.println("[HAPTIC] skipped, effect=0");
     return false;
   }
 
+  uint8_t followUp1 = hapticEffectToFollowUpWaveform(effect, 1);
+  uint8_t followUp2 = hapticEffectToFollowUpWaveform(effect, 2);
+
   configureHapticDriver();
   drv.stop();
   drv.setMode(DRV2605_MODE_INTTRIG);
   drv.setWaveform(0, waveform);
-  drv.setWaveform(1, 0);
+  drv.setWaveform(1, followUp1);
+  drv.setWaveform(2, followUp2);
+  drv.setWaveform(3, 0);
   drv.go();
 
   if (waitForFinish) {
@@ -454,11 +474,11 @@ bool triggerHapticWaveform(uint8_t waveform, bool waitForFinish) {
 }
 
 bool playHaptic(uint8_t effect) {
-  return triggerHapticWaveform(hapticEffectToWaveform(effect), false);
+  return triggerHapticSequence(effect, false);
 }
 
 bool playHapticWaveform(uint8_t effect) {
-  return triggerHapticWaveform(hapticEffectToWaveform(effect), true);
+  return triggerHapticSequence(effect, true);
 }
 
 bool playHapticRtpPulse(uint8_t effect) {
@@ -471,7 +491,7 @@ bool playHapticRtpPulse(uint8_t effect) {
     return false;
   }
 
-  uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 90, 220);
+  uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 110, 255);
   configureHapticDriver();
   drv.stop();
   drv.setMode(DRV2605_MODE_REALTIME);
