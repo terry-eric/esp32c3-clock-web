@@ -40,6 +40,12 @@ Open the web console in Chrome or Edge, press `Connect`, choose the ESP32-C3 ser
 
 After the USB console connects, it automatically syncs the MCU clock once per hour while the page stays connected.
 
+You can also sync time once without opening the web console:
+
+```powershell
+python scripts\notify_mcu.py --mode usb --state sync-time
+```
+
 The MCU accepts these USB serial commands at `115200` baud:
 
 ```text
@@ -74,6 +80,8 @@ python scripts\notify_mcu.py --mode usb --state busy
 python scripts\notify_mcu.py --mode usb --state done
 ```
 
+By default, the notifier sends `set_time` before `busy` and `done`, so Codex status notifications also refresh the MCU clock. The MCU resets its USB time-sync timer when `set_time` succeeds. Add `--no-sync-time` if you only want to send the status command.
+
 Optional local `.env`:
 
 ```text
@@ -81,6 +89,7 @@ MCU_NOTIFY_MODE=usb
 MCU_NOTIFY_PORT=
 MCU_NOTIFY_EFFECT=10
 MCU_NOTIFY_STATE=done
+MCU_SYNC_TIME_BEFORE_NOTIFY=true
 ```
 
 Leave `MCU_NOTIFY_PORT` empty to auto-detect the MCU with `codex_ping`. Set it to `COM4` only if you want to force one port.
