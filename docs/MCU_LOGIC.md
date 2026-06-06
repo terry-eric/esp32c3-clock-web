@@ -50,12 +50,12 @@ test_haptic 10
 stop_alarm
 snooze
 set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightness":4}
-run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","intervalMs":180,"count":6}
+run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","haptic":"on","intervalMs":180,"count":6}
 ```
 
 `usb_keepalive` keeps the serial session active. The MCU blinks the red status LED when USB time sync has not succeeded yet or has not refreshed within about 65 minutes.
 `get_config` returns the current MCU config so the web console can use the device values as defaults after connecting.
-`run_pattern` runs editable green/red/flash LED behavior with configurable mode, interval, and count.
+`run_pattern` runs editable green/red/flash LED and haptic behavior with configurable mode, interval, and count.
 `codex_busy` shows solid red while Codex is working. `notify_done` clears busy, flashes/vibrates, then shows solid green. `codex_idle` clears the Codex status light.
 `set_config` applies the provided alarm/output fields, clamps safe ranges, and writes changed settings to NVS.
 `set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. The web console sends it on connect and once per hour while USB stays connected.

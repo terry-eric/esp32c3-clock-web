@@ -62,18 +62,19 @@ const defaultPattern = {
   green: 'off',
   red: 'off',
   flash: 'off',
+  haptic: 'off',
   intervalMs: 180,
   count: 3
 };
 
 const defaultCommandActions = [
-  { id: 'busy', labels: { en: 'Codex busy', zh: 'Codex 工作中' }, command: 'codex_busy', pattern: { green: 'off', red: 'on', flash: 'off', intervalMs: 180, count: 1 } },
-  { id: 'done', labels: { en: 'Done alert', zh: '完成提醒' }, command: 'notify_done', pattern: { green: 'blink', red: 'off', flash: 'blink', intervalMs: 180, count: 6 } },
-  { id: 'idle', labels: { en: 'Clear status', zh: '清除狀態' }, command: 'codex_idle', pattern: { green: 'off', red: 'off', flash: 'off', intervalMs: 180, count: 1 } },
-  { id: 'leds', labels: { en: 'Test LEDs', zh: '測試 LED' }, command: 'test_led', pattern: { green: 'toggle', red: 'toggle', flash: 'blink', intervalMs: 150, count: 6 } },
-  { id: 'haptic', labels: { en: 'Test haptic', zh: '測試震動' }, command: 'test_haptic', pattern: { green: 'off', red: 'off', flash: 'blink', intervalMs: 180, count: 2 } },
-  { id: 'stop', labels: { en: 'Stop alarm', zh: '停止鬧鐘' }, command: 'stop_alarm', pattern: { green: 'on', red: 'on', flash: 'off', intervalMs: 180, count: 2 } },
-  { id: 'snooze', labels: { en: 'Snooze', zh: '貪睡' }, command: 'snooze', pattern: { green: 'blink', red: 'off', flash: 'off', intervalMs: 250, count: 4 } }
+  { id: 'busy', labels: { en: 'Codex busy', zh: 'Codex 工作中' }, command: 'codex_busy', pattern: { green: 'off', red: 'on', flash: 'off', haptic: 'off', intervalMs: 180, count: 1 } },
+  { id: 'done', labels: { en: 'Done alert', zh: '完成提醒' }, command: 'notify_done', pattern: { green: 'blink', red: 'off', flash: 'blink', haptic: 'on', intervalMs: 180, count: 6 } },
+  { id: 'idle', labels: { en: 'Clear status', zh: '清除狀態' }, command: 'codex_idle', pattern: { green: 'off', red: 'off', flash: 'off', haptic: 'off', intervalMs: 180, count: 1 } },
+  { id: 'leds', labels: { en: 'Test LEDs', zh: '測試 LED' }, command: 'test_led', pattern: { green: 'toggle', red: 'toggle', flash: 'blink', haptic: 'off', intervalMs: 150, count: 6 } },
+  { id: 'haptic', labels: { en: 'Test haptic', zh: '測試震動' }, command: 'test_haptic', pattern: { green: 'off', red: 'off', flash: 'blink', haptic: 'on', intervalMs: 180, count: 2 } },
+  { id: 'stop', labels: { en: 'Stop alarm', zh: '停止鬧鐘' }, command: 'stop_alarm', pattern: { green: 'on', red: 'on', flash: 'off', haptic: 'off', intervalMs: 180, count: 2 } },
+  { id: 'snooze', labels: { en: 'Snooze', zh: '貪睡' }, command: 'snooze', pattern: { green: 'blink', red: 'off', flash: 'off', haptic: 'off', intervalMs: 250, count: 4 } }
 ];
 
 const commandActionsStorageKey = 'esp32c3-clock-web.commandActions.v1';
@@ -226,6 +227,7 @@ function loadCommandActions() {
         green: lightModeChoices.includes(sourcePattern.green) ? sourcePattern.green : fallback.pattern.green,
         red: lightModeChoices.includes(sourcePattern.red) ? sourcePattern.red : fallback.pattern.red,
         flash: lightModeChoices.includes(sourcePattern.flash) ? sourcePattern.flash : fallback.pattern.flash,
+        haptic: lightModeChoices.includes(sourcePattern.haptic) ? sourcePattern.haptic : fallback.pattern.haptic,
         intervalMs: Math.min(2000, Math.max(50, Number(sourcePattern.intervalMs) || fallback.pattern.intervalMs)),
         count: Math.min(20, Math.max(1, Number(sourcePattern.count) || fallback.pattern.count))
       };
@@ -535,6 +537,7 @@ export default function App() {
           green: action.pattern.green,
           red: action.pattern.red,
           flash: action.pattern.flash,
+          haptic: action.pattern.haptic,
           intervalMs: action.pattern.intervalMs,
           count: action.pattern.count,
           hapticEffect: config.hapticEffect
@@ -858,10 +861,11 @@ export default function App() {
 
               <div className="rounded-md border border-stone-300 bg-white p-4">
                 <FieldLabel>{t.commandPattern}: {selectedAction.labels[language]}</FieldLabel>
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <PatternSelect label={t.greenLed} value={selectedAction.pattern.green} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { green: value })} />
                   <PatternSelect label={t.redLed} value={selectedAction.pattern.red} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { red: value })} />
                   <PatternSelect label={t.flashLedShort} value={selectedAction.pattern.flash} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { flash: value })} />
+                  <PatternSelect label={t.haptic} value={selectedAction.pattern.haptic} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { haptic: value })} />
                 </div>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <NumberField

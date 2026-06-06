@@ -17,7 +17,7 @@ test_haptic 10
 stop_alarm
 snooze
 set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightness":4}
-run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","intervalMs":180,"count":6}
+run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","haptic":"on","intervalMs":180,"count":6}
 ```
 
 `codex_ping` returns:
@@ -61,7 +61,7 @@ The console command buttons are editable. Button labels, command mappings, and l
 | `set_time` | Sets the MCU clock from Unix epoch seconds. |
 | `get_config` | Returns `usb_config_json {...}` with the current MCU NVS-backed alarm/output settings plus `epoch` and `timeText` for browser/computer time comparison. |
 | `set_config` | Applies alarm/output fields and writes changed values to NVS. |
-| `run_pattern` | Runs an editable LED pattern for green/red/flash LEDs, then applies the selected command status. |
+| `run_pattern` | Runs editable green/red/flash LED and haptic behavior, then applies the selected command status. |
 | `codex_busy` | Shows solid red while Codex is working. |
 | `notify_done` | Clears busy, flashes/vibrates, then shows solid green. |
 | `codex_idle` | Clears Codex red/green status and returns to normal LED patterns. |

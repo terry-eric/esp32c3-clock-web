@@ -43,7 +43,7 @@
     set_time 1780702200
     get_config
     set_config {"enabled":true,"hour":7,"minute":30,...}
-    run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","intervalMs":180,"count":3}
+    run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","haptic":"on","intervalMs":180,"count":3}
     usb_keepalive
     codex_busy
     codex_idle
@@ -625,7 +625,7 @@ void sendUsbConfigSnapshot() {
   Serial.println();
 }
 
-void applyCommandStatus(String command, int effectFromCommand) {
+void applyCommandStatus(String command, int effectFromCommand, bool allowCommandHaptic = true) {
   command.trim();
 
   if (command == "codex_busy") {
@@ -639,7 +639,9 @@ void applyCommandStatus(String command, int effectFromCommand) {
   } else if (command == "test_haptic") {
     lastAction = "TEST_HAPTIC";
     int effect = effectFromCommand > 0 ? effectFromCommand : alarmConfig.hapticEffect;
-    playHaptic((uint8_t)effect);
+    if (allowCommandHaptic) {
+      playHaptic((uint8_t)effect);
+    }
   } else if (command == "stop_alarm") {
     stopAlarm();
   } else if (command == "snooze") {
@@ -654,9 +656,15 @@ void runPatternCommand(JsonVariantConst doc) {
   String greenMode = String(doc["green"] | "off");
   String redMode = String(doc["red"] | "off");
   String flashMode = String(doc["flash"] | "off");
+  String hapticMode = String(doc["haptic"] | "");
   int intervalMs = constrain(doc["intervalMs"] | 180, 50, 2000);
   int count = constrain(doc["count"] | 3, 1, 20);
   int effect = constrain(doc["hapticEffect"] | alarmConfig.hapticEffect, 0, 10);
+  bool didPatternHaptic = false;
+
+  if (hapticMode == "") {
+    hapticMode = (command == "notify_done" || command == "test_haptic") ? "on" : "off";
+  }
 
   Serial.print("[CMD] run_pattern ");
   Serial.println(command);
@@ -666,14 +674,16 @@ void runPatternCommand(JsonVariantConst doc) {
     writePatternLight(greenMode, phase, writeStatusGreen);
     writePatternLight(redMode, phase, writeStatusRed);
     writePatternLight(flashMode, phase, writeLedFlash);
-    if ((command == "notify_done" || command == "test_haptic") && effect > 0) {
+    bool pulseHaptic = hapticMode == "on" || ((hapticMode == "blink" || hapticMode == "toggle") && phase);
+    if (pulseHaptic && effect > 0) {
+      didPatternHaptic = true;
       playHaptic((uint8_t)effect);
     }
     delay((unsigned long)intervalMs);
   }
 
   allLedOff();
-  applyCommandStatus(command, effect);
+  applyCommandStatus(command, effect, !didPatternHaptic);
 }
 
 void stopAlarm() {
