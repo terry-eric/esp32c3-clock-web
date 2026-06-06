@@ -38,7 +38,9 @@ Open the web console in Chrome or Edge, press `Connect`, choose the ESP32-C3 ser
 - `Done alert` to flash/vibrate immediately
 - `Test LEDs` and `Test haptic` for hardware checks
 
-After the USB console connects, it automatically syncs the MCU clock once per hour while the page stays connected.
+The first Web Serial use must be selected by hand because the browser requires device permission. After permission is granted, the console reuses the remembered device automatically.
+
+The console opens USB only for the current action, then closes the port again. This keeps the browser from holding COM busy and blocking Codex/Gemini done notifications.
 
 You can also sync time once without opening the web console:
 
@@ -87,9 +89,10 @@ Optional local `.env`:
 ```text
 MCU_NOTIFY_MODE=usb
 MCU_NOTIFY_PORT=
+MCU_NOTIFY_DEVICE_ID=alarm_c3_001
 MCU_NOTIFY_EFFECT=10
 MCU_NOTIFY_STATE=done
 MCU_SYNC_TIME_BEFORE_NOTIFY=true
 ```
 
-Leave `MCU_NOTIFY_PORT` empty to auto-detect the MCU with `codex_ping`. Set it to `COM4` only if you want to force one port.
+Leave `MCU_NOTIFY_PORT` empty to scan COM ports. The notifier only continues on a port whose `codex_ping` reply contains `MCU_NOTIFY_DEVICE_ID`, so it will not send alerts to unrelated serial devices. Set `MCU_NOTIFY_PORT` only if you want to force one port.

@@ -9,11 +9,12 @@ Optional local settings:
 ```powershell
 $env:MCU_NOTIFY_MODE="usb"
 $env:MCU_NOTIFY_PORT=""
+$env:MCU_NOTIFY_DEVICE_ID="alarm_c3_001"
 $env:MCU_NOTIFY_EFFECT="10"
 $env:MCU_NOTIFY_STATE="done"
 ```
 
-Leave `MCU_NOTIFY_PORT` empty to auto-detect the MCU with `codex_ping`.
+Leave `MCU_NOTIFY_PORT` empty to scan COM ports. The notifier only sends commands after `codex_ping` returns the expected `MCU_NOTIFY_DEVICE_ID`.
 
 ## Slash Prompt
 

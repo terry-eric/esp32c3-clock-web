@@ -394,43 +394,9 @@ export default function App() {
   }, [language]);
 
   useEffect(() => {
-    if (!usbState.connected) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      if (usbBusyRef.current) return;
-      withUsbBusy(async () => {
-        await syncUsbTime({ quiet: true });
-        await loadUsbConfig();
-      }, { visible: false })
-        .catch(() => {});
-    }, 60 * 60 * 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, [usbState.connected]);
-
-  useEffect(() => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(commandActionsStorageKey, JSON.stringify(commandActions));
   }, [commandActions]);
-
-  useEffect(() => {
-    if (!usbState.connected) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      if (usbBusyRef.current) return;
-      withUsbBusy(() => writeUsbLine('usb_keepalive'), { visible: false }).catch(async (error) => {
-        await closeUsbPort();
-        setUsbState((current) => ({
-          ...current,
-          connected: false,
-          label: 'Disconnected',
-          detail: error.message
-        }));
-      });
-    }, 5000);
-
-    return () => window.clearInterval(intervalId);
-  }, [usbState.connected]);
 
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serial' in navigator)) return undefined;
@@ -662,6 +628,13 @@ export default function App() {
         await delay(600);
         await loadUsbConfig({ required: true });
       });
+      await closeUsbPort();
+      setUsbState((current) => ({
+        ...current,
+        connected: false,
+        label: 'Settings loaded',
+        detail: 'MCU settings loaded, USB port closed.'
+      }));
     } catch (error) {
       await closeUsbPort();
       setUsbState((current) => ({
@@ -687,6 +660,7 @@ export default function App() {
     try {
       setSelectedActionId(action.id);
       await withUsbBusy(async () => {
+        await ensureUsbConnected();
         await applyUsbConfig({ quiet: true, keepConnectedOnError: true });
         const hapticEffect = action.pattern.haptic === 'off'
           ? 0
@@ -703,14 +677,19 @@ export default function App() {
         };
         await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
         await expectUsbReply('usb_pattern_', estimatePatternTimeoutMs(body));
+        await closeUsbPort();
       });
       setUsbState((current) => ({
         ...current,
-        label: 'Sent'
+        connected: false,
+        label: 'Sent',
+        detail: 'Command sent to MCU, USB port closed.'
       }));
     } catch (error) {
+      await closeUsbPort();
       setUsbState((current) => ({
         ...current,
+        connected: false,
         label: 'Send failed',
         detail: error.message
       }));
@@ -743,12 +722,22 @@ export default function App() {
   async function syncAndLoadUsbTime() {
     try {
       await withUsbBusy(async () => {
+        await ensureUsbConnected();
         await syncUsbTime();
         await loadUsbConfig();
+        await closeUsbPort();
+        setUsbState((current) => ({
+          ...current,
+          connected: false,
+          label: 'Time synced',
+          detail: 'MCU time synced, USB port closed.'
+        }));
       });
     } catch (error) {
+      await closeUsbPort();
       setUsbState((current) => ({
         ...current,
+        connected: false,
         label: 'Time sync failed',
         detail: error.message
       }));
@@ -987,7 +976,7 @@ export default function App() {
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       {t.connect}
                     </button>
-                    <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.connected || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected && !usbBusy ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.supported || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
                       {t.time}
                     </button>
                     <button type="button" onClick={saveUsbConfig} disabled={!usbState.supported || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
@@ -1013,11 +1002,11 @@ export default function App() {
                       key={action.id}
                       type="button"
                       onClick={() => sendUsbCommand(action)}
-                      disabled={!usbState.connected || usbBusy}
+                      disabled={!usbState.supported || usbBusy}
                       className={`h-10 rounded-md border px-2 text-sm font-semibold ${
-                        selectedActionId === action.id && usbState.connected && !usbBusy
+                        selectedActionId === action.id && usbState.supported && !usbBusy
                           ? 'border-teal-700 bg-teal-700 text-white'
-                          : usbState.connected && !usbBusy
+                          : usbState.supported && !usbBusy
                             ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
                             : 'border-stone-200 bg-stone-100 text-stone-400'
                       }`}

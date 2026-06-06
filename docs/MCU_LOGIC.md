@@ -58,7 +58,7 @@ run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink"
 `run_pattern` runs editable green/red/flash LED and haptic behavior with configurable mode, interval, and count.
 `codex_busy` shows solid red while Codex is working. `notify_done` clears busy, flashes/vibrates, then shows solid green. `codex_idle` clears the Codex status light.
 `set_config` applies the provided alarm/output fields, clamps safe ranges, and writes changed settings to NVS.
-`set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. The web console sends it on connect and once per hour while USB stays connected.
+`set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. The web console opens USB only for the current action, sends time/config/command data as needed, then closes the port again so local Codex/Gemini notifications can use the same COM port.
 
 ## Persisted Settings
 

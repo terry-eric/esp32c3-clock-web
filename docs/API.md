@@ -52,7 +52,7 @@ Direct local commands such as `codex_busy` and `notify_done 10` return this afte
 usb_command_ok notify_done
 ```
 
-The web console uses Web Serial in Chrome or Edge to send the same commands. It sends `set_time` on connect, then reads `get_config` and uses the MCU values as the page defaults. Once per hour, it sends `set_time` again and reads `get_config` again to confirm the MCU-side state.
+The web console uses Web Serial in Chrome or Edge to send the same commands. The first use must be selected by hand because the browser requires device permission. After permission exists, each console action opens the remembered device, sends the needed command(s), then closes the USB port so Codex/Gemini notifications can use the same COM port.
 
 The local notifier can sync time without the web console:
 
@@ -60,7 +60,7 @@ The local notifier can sync time without the web console:
 python scripts\notify_mcu.py --mode usb --state sync-time
 ```
 
-Normal `busy` and `done` notifier commands also send `set_time` first unless `--no-sync-time` is passed. When `set_time` succeeds, the MCU resets its USB time-sync timer.
+Normal `busy` and `done` notifier commands also send `set_time` first unless `--no-sync-time` is passed. The notifier requires the `codex_ping` reply to match the expected device id before it sends time or status commands.
 
 The console command buttons are editable. Button labels, command mappings, and light-pattern settings are saved in browser storage and reused for later clicks/page loads. MCU alarm/output settings are still persisted on the device through `set_config`.
 
