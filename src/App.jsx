@@ -313,6 +313,7 @@ export default function App() {
   const [timeCompare, setTimeCompare] = useState(defaultTimeCompare);
   const [commandActions, setCommandActions] = useState(loadCommandActions);
   const [selectedActionId, setSelectedActionId] = useState(defaultCommandActions[0].id);
+  const [usbBusy, setUsbBusy] = useState(false);
   const [usbState, setUsbState] = useState({
     connected: false,
     supported: typeof navigator !== 'undefined' && 'serial' in navigator,
@@ -320,6 +321,7 @@ export default function App() {
     detail: 'USB status is unknown until you connect from this browser.'
   });
   const serialPortRef = useRef(null);
+  const usbBusyRef = useRef(false);
 
   const jsonText = useMemo(() => toJson(config), [config]);
   const alarmTime = formatTime(config);
@@ -335,8 +337,11 @@ export default function App() {
     if (!usbState.connected) return undefined;
 
     const intervalId = window.setInterval(() => {
-      syncUsbTime({ quiet: true })
-        .then(() => loadUsbConfig())
+      if (usbBusyRef.current) return;
+      withUsbBusy(async () => {
+        await syncUsbTime({ quiet: true });
+        await loadUsbConfig();
+      }, { visible: false })
         .catch(() => {});
     }, 60 * 60 * 1000);
 
@@ -352,7 +357,8 @@ export default function App() {
     if (!usbState.connected) return undefined;
 
     const intervalId = window.setInterval(() => {
-      writeUsbLine('usb_keepalive').catch((error) => {
+      if (usbBusyRef.current) return;
+      withUsbBusy(() => writeUsbLine('usb_keepalive'), { visible: false }).catch((error) => {
         setUsbState((current) => ({
           ...current,
           connected: false,
@@ -371,6 +377,21 @@ export default function App() {
       ...patch,
       version: current.version + 1
     }));
+  }
+
+  async function withUsbBusy(operation, options = {}) {
+    if (usbBusyRef.current) {
+      throw new Error('USB is busy.');
+    }
+    const visible = options.visible !== false;
+    usbBusyRef.current = true;
+    if (visible) setUsbBusy(true);
+    try {
+      return await operation();
+    } finally {
+      usbBusyRef.current = false;
+      if (visible) setUsbBusy(false);
+    }
   }
 
   async function writeUsbLine(line) {
@@ -439,8 +460,14 @@ export default function App() {
       });
 
       if (connected) {
-        await syncUsbTime();
-        await loadUsbConfig();
+        await withUsbBusy(async () => {
+          try {
+            await syncUsbTime({ keepConnectedOnError: true });
+          } catch {
+            // Still load persisted MCU settings so the UI matches the device after connect.
+          }
+          await loadUsbConfig();
+        });
       }
     } catch (error) {
       setUsbState((current) => ({
@@ -465,18 +492,20 @@ export default function App() {
   async function sendUsbCommand(action) {
     try {
       setSelectedActionId(action.id);
-      await applyUsbConfig({ quiet: true });
-      const body = {
-        command: action.command,
-        green: action.pattern.green,
-        red: action.pattern.red,
-        flash: action.pattern.flash,
-        intervalMs: action.pattern.intervalMs,
-        count: action.pattern.count,
-        hapticEffect: config.hapticEffect
-      };
-      await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
-      await readUsbReply('usb_pattern_', body.intervalMs * body.count + 2500);
+      await withUsbBusy(async () => {
+        await applyUsbConfig({ quiet: true, keepConnectedOnError: true });
+        const body = {
+          command: action.command,
+          green: action.pattern.green,
+          red: action.pattern.red,
+          flash: action.pattern.flash,
+          intervalMs: action.pattern.intervalMs,
+          count: action.pattern.count,
+          hapticEffect: config.hapticEffect
+        };
+        await writeUsbLine(`run_pattern ${JSON.stringify(body)}`);
+        await readUsbReply('usb_pattern_', body.intervalMs * body.count + 3000);
+      });
       setUsbState((current) => ({
         ...current,
         label: 'Sent'
@@ -484,8 +513,8 @@ export default function App() {
     } catch (error) {
       setUsbState((current) => ({
         ...current,
-        connected: false,
-        label: 'Send failed'
+        label: 'Send failed',
+        detail: error.message
       }));
     }
   }
@@ -505,7 +534,7 @@ export default function App() {
     } catch (error) {
       setUsbState((current) => ({
         ...current,
-        connected: false,
+        connected: options.keepConnectedOnError ? current.connected : false,
         label: 'Time sync failed',
         detail: error.message
       }));
@@ -514,8 +543,30 @@ export default function App() {
   }
 
   async function syncAndLoadUsbTime() {
-    await syncUsbTime();
-    await loadUsbConfig();
+    try {
+      await withUsbBusy(async () => {
+        await syncUsbTime();
+        await loadUsbConfig();
+      });
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        label: 'Time sync failed',
+        detail: error.message
+      }));
+    }
+  }
+
+  async function saveUsbConfig() {
+    try {
+      await withUsbBusy(() => applyUsbConfig());
+    } catch (error) {
+      setUsbState((current) => ({
+        ...current,
+        label: 'Apply failed',
+        detail: error.message
+      }));
+    }
   }
 
   async function loadUsbConfig() {
@@ -583,7 +634,7 @@ export default function App() {
     } catch (error) {
       setUsbState((current) => ({
         ...current,
-        connected: false,
+        connected: options.keepConnectedOnError ? current.connected : false,
         label: 'Apply failed',
         detail: error.message
       }));
@@ -689,10 +740,10 @@ export default function App() {
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
                       {t.connect}
                     </button>
-                    <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.connected || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected && !usbBusy ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
                       {t.time}
                     </button>
-                    <button type="button" onClick={applyUsbConfig} disabled={!usbState.connected} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={saveUsbConfig} disabled={!usbState.connected || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected && !usbBusy ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
                       {t.apply}
                     </button>
                   </div>
@@ -715,11 +766,11 @@ export default function App() {
                       key={action.id}
                       type="button"
                       onClick={() => sendUsbCommand(action)}
-                      disabled={!usbState.connected}
+                      disabled={!usbState.connected || usbBusy}
                       className={`h-10 rounded-md border px-2 text-sm font-semibold ${
-                        selectedActionId === action.id && usbState.connected
+                        selectedActionId === action.id && usbState.connected && !usbBusy
                           ? 'border-teal-700 bg-teal-700 text-white'
-                          : usbState.connected
+                          : usbState.connected && !usbBusy
                             ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
                             : 'border-stone-200 bg-stone-100 text-stone-400'
                       }`}
