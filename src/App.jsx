@@ -468,6 +468,7 @@ export default function App() {
           } catch {
             // Still load persisted MCU settings so the UI matches the device after connect.
           }
+          await delay(600);
           await loadUsbConfig({ required: true });
         });
       }
@@ -591,12 +592,12 @@ export default function App() {
       let body = null;
       let lastError = null;
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (attempt > 0) await delay(300 + attempt * 200);
         try {
           body = await requestUsbConfigSnapshot();
           break;
         } catch (error) {
           lastError = error;
-          await delay(160);
         }
       }
       if (!body) throw lastError || new Error('MCU config was not loaded.');
@@ -633,12 +634,14 @@ export default function App() {
         label: 'Settings loaded',
         detail: `LED ${nextConfig.ledPairBrightness}/10, Flash ${nextConfig.flashLedBrightness}/10, Haptic ${nextConfig.hapticEffect}/10`
       }));
+      return true;
     } catch (error) {
       setUsbState((current) => ({
         ...current,
         label: options.required ? 'Settings load failed' : 'Connected',
         detail: error.message
       }));
+      return false;
     }
   }
 
@@ -769,6 +772,11 @@ export default function App() {
                       <span className={`h-2.5 w-2.5 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
                       <div className="text-sm font-semibold">USB {localizeUsbStatus(usbState.label, language)}</div>
                     </div>
+                    {usbState.detail ? (
+                      <div className="mt-1 max-w-[360px] truncate text-xs text-stone-500" title={usbState.detail}>
+                        {usbState.detail}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="grid grid-cols-3 gap-2 sm:w-[315px]">
                     <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
