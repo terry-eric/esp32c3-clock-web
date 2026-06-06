@@ -671,7 +671,7 @@ export default function App() {
       setUsbState((current) => ({
         ...current,
         label: 'Settings loaded',
-        detail: `LED ${nextConfig.ledPairBrightness}/10, Flash ${nextConfig.flashLedBrightness}/10, Haptic ${nextConfig.hapticEffect}/10, DRV ${body.drvOk === false ? 'FAIL' : 'OK'}`
+        detail: `LED ${nextConfig.ledPairBrightness}/10, Flash ${nextConfig.flashLedBrightness}/10, Haptic ${nextConfig.hapticEffect}/10, DRV ${body.drvOk === false ? 'FAIL' : 'OK'}, Status ${Number.isFinite(Number(body.drvStatus)) ? body.drvStatus : '?'}`
       }));
       return true;
     } catch (error) {

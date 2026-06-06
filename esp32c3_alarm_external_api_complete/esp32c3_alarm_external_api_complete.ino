@@ -120,6 +120,7 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
+const unsigned long HAPTIC_RTP_PULSE_MS           = 140;
 
 // ============================================================
 // Objects
@@ -331,6 +332,13 @@ void writePatternLight(const String& mode, bool phase, void (*writer)(bool)) {
   }
 }
 
+void configureHapticDriver() {
+  drv.useERM();
+  drv.selectLibrary(1);
+  drv.setRealtimeValue(0);
+  drv.setMode(DRV2605_MODE_INTTRIG);
+}
+
 bool playHaptic(uint8_t effect) {
   if (!drvOK) {
     Serial.println("[HAPTIC] skipped, DRV=FAIL");
@@ -341,11 +349,14 @@ bool playHaptic(uint8_t effect) {
     return false;
   }
 
-  drv.setMode(DRV2605_MODE_INTTRIG);
+  uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 80, 255);
+  drv.useERM();
   drv.stop();
-  drv.setWaveform(0, effect);
-  drv.setWaveform(1, 0);
-  drv.go();
+  drv.setMode(DRV2605_MODE_REALTIME);
+  drv.setRealtimeValue(drive);
+  delay(HAPTIC_RTP_PULSE_MS);
+  drv.setRealtimeValue(0);
+  drv.setMode(DRV2605_MODE_INTTRIG);
   return true;
 }
 
@@ -542,12 +553,7 @@ void initDRV2605L() {
   drvOK = true;
   Serial.println("[DRV2605L] Found");
 
-  // ERM motor library.
-  // If using LRA actuator, try drv.selectLibrary(6);
-  drv.selectLibrary(1);
-
-  // Internal trigger mode
-  drv.setMode(DRV2605_MODE_INTTRIG);
+  configureHapticDriver();
 
   playHaptic(1);
 }
@@ -627,6 +633,7 @@ void sendUsbConfigSnapshot() {
   doc["version"] = alarmConfig.version;
   doc["timeOk"] = timeOK;
   doc["drvOk"] = drvOK;
+  doc["drvStatus"] = drvOK ? drv.readRegister8(DRV2605_REG_STATUS) : -1;
   doc["epoch"] = timeOK ? (long)time(nullptr) : 0;
   doc["timeText"] = timeOK ? getTimeString() : "";
 
