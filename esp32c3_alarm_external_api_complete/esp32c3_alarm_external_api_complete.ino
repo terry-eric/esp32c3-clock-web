@@ -150,7 +150,6 @@ struct AlarmConfig {
   int hapticEffect = 10;
   int ledPairBrightness = 4;
   int flashLedBrightness = 10;
-  int version = 0;
 };
 
 AlarmConfig alarmConfig;
@@ -564,7 +563,6 @@ void saveConfigToNVS() {
   prefs.putInt("effect", alarmConfig.hapticEffect);
   prefs.putInt("ledPair", alarmConfig.ledPairBrightness);
   prefs.putInt("ledFlash", alarmConfig.flashLedBrightness);
-  prefs.putInt("version", alarmConfig.version);
   prefs.putInt("lastCmd", lastCommandId);
   prefs.end();
 }
@@ -593,13 +591,12 @@ void loadConfigFromNVS() {
   alarmConfig.hapticEffect = prefs.getInt("effect", 10);
   alarmConfig.ledPairBrightness = prefs.getInt("ledPair", 4);
   alarmConfig.flashLedBrightness = prefs.getInt("ledFlash", 10);
-  alarmConfig.version = prefs.getInt("version", 0);
   lastCommandId = prefs.getInt("lastCmd", 0);
   prefs.end();
   clampAlarmConfig();
 
   Serial.println("[NVS] Alarm config loaded");
-  Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d lastCmd=%d\n",
+  Serial.printf("      enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d lastCmd=%d\n",
                 alarmConfig.enabled,
                 alarmConfig.hour,
                 alarmConfig.minute,
@@ -610,7 +607,6 @@ void loadConfigFromNVS() {
                 alarmConfig.hapticEffect,
                 alarmConfig.ledPairBrightness,
                 alarmConfig.flashLedBrightness,
-                alarmConfig.version,
                 lastCommandId);
 }
 
@@ -794,7 +790,6 @@ void sendUsbConfigSnapshot() {
   doc["hapticEffect"] = alarmConfig.hapticEffect;
   doc["ledPairBrightness"] = alarmConfig.ledPairBrightness;
   doc["flashLedBrightness"] = alarmConfig.flashLedBrightness;
-  doc["version"] = alarmConfig.version;
   doc["timeOk"] = timeOK;
   doc["drvOk"] = drvOK;
   doc["drvStatus"] = drvOK ? drv.readRegister8(DRV2605_REG_STATUS) : -1;
@@ -944,12 +939,6 @@ bool applyConfigFromJson(JsonVariantConst doc) {
     return false;
   }
 
-  int incomingVersion = doc["version"] | alarmConfig.version;
-  if (incomingVersion < alarmConfig.version) {
-    Serial.println("[API] Older config version, ignored");
-    return false;
-  }
-
   bool previousEnabled = alarmConfig.enabled;
   int previousHour = alarmConfig.hour;
   int previousMinute = alarmConfig.minute;
@@ -960,7 +949,6 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   int previousHapticEffect = alarmConfig.hapticEffect;
   int previousLedPairBrightness = alarmConfig.ledPairBrightness;
   int previousFlashLedBrightness = alarmConfig.flashLedBrightness;
-  int previousVersion = alarmConfig.version;
 
   alarmConfig.enabled = doc["enabled"] | alarmConfig.enabled;
   alarmConfig.hour = doc["hour"] | alarmConfig.hour;
@@ -972,7 +960,6 @@ bool applyConfigFromJson(JsonVariantConst doc) {
   alarmConfig.hapticEffect = doc["hapticEffect"] | alarmConfig.hapticEffect;
   alarmConfig.ledPairBrightness = doc["ledPairBrightness"] | alarmConfig.ledPairBrightness;
   alarmConfig.flashLedBrightness = doc["flashLedBrightness"] | alarmConfig.flashLedBrightness;
-  alarmConfig.version = incomingVersion;
 
   clampAlarmConfig();
 
@@ -986,8 +973,7 @@ bool applyConfigFromJson(JsonVariantConst doc) {
     previousMaxRingSec != alarmConfig.maxRingSec ||
     previousHapticEffect != alarmConfig.hapticEffect ||
     previousLedPairBrightness != alarmConfig.ledPairBrightness ||
-    previousFlashLedBrightness != alarmConfig.flashLedBrightness ||
-    previousVersion != alarmConfig.version;
+    previousFlashLedBrightness != alarmConfig.flashLedBrightness;
 
   bool brightnessChanged =
     previousLedPairBrightness != alarmConfig.ledPairBrightness ||
@@ -1014,7 +1000,7 @@ bool applyConfigFromJson(JsonVariantConst doc) {
     Serial.println("[ALARM] Schedule changed, today's trigger reset");
   }
 
-  Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d version=%d\n",
+  Serial.printf("[API] Config updated: enabled=%d time=%02d:%02d repeatMask=%u prealert=%d snooze=%d maxRing=%d effect=%d ledPair=%d ledFlash=%d\n",
                 alarmConfig.enabled,
                 alarmConfig.hour,
                 alarmConfig.minute,
@@ -1024,8 +1010,7 @@ bool applyConfigFromJson(JsonVariantConst doc) {
                 alarmConfig.maxRingSec,
                 alarmConfig.hapticEffect,
                 alarmConfig.ledPairBrightness,
-                alarmConfig.flashLedBrightness,
-                alarmConfig.version);
+                alarmConfig.flashLedBrightness);
 
   if (brightnessChanged) {
     previewLedBrightness();
@@ -1116,8 +1101,6 @@ void handleUsbCommandLine(String line) {
     }
 
     doc["deviceId"] = DEVICE_ID;
-    doc["version"] = alarmConfig.version + 1;
-
     if (applyConfigFromJson(doc.as<JsonVariantConst>())) {
       Serial.println("usb_config_ok");
     } else {
@@ -1428,14 +1411,13 @@ void printHeartbeat() {
   bool ok = getLocalTimeSafe(&t);
 
   if (ok) {
-    Serial.printf("[HB] %04d-%02d-%02d %02d:%02d:%02d, state=%s, USB=time, DRV=%s, alarm=%02d:%02d, ver=%d\n",
+    Serial.printf("[HB] %04d-%02d-%02d %02d:%02d:%02d, state=%s, USB=time, DRV=%s, alarm=%02d:%02d\n",
                   t.tm_year + 1900, t.tm_mon + 1, t.tm_mday,
                   t.tm_hour, t.tm_min, t.tm_sec,
                   stateToString(stateNow).c_str(),
                   drvOK ? "OK" : "FAIL",
                   alarmConfig.hour,
-                  alarmConfig.minute,
-                  alarmConfig.version);
+                  alarmConfig.minute);
   } else {
     Serial.printf("[HB] time invalid, state=%s, USB time sync needed, DRV=%s\n",
                   stateToString(stateNow).c_str(),

@@ -77,7 +77,6 @@ maxRingSec
 hapticEffect
 ledPairBrightness
 flashLedBrightness
-version
 lastCommandId
 ```
 

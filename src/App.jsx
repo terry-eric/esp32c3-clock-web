@@ -10,8 +10,7 @@ const defaultConfig = {
   maxRingSec: 10,
   hapticEffect: 10,
   ledPairBrightness: 4,
-  flashLedBrightness: 10,
-  version: 1
+  flashLedBrightness: 10
 };
 
 const defaultTimeCompare = {
@@ -95,7 +94,6 @@ const text = {
     snooze: 'Snooze',
     maxRing: 'Max ring',
     alarmEnabled: 'Alarm enabled',
-    version: 'Version',
     outputs: 'MCU Outputs',
     mainLeds: 'Main LEDs',
     flashLed: 'Flash LED',
@@ -136,7 +134,6 @@ const text = {
     snooze: '貪睡',
     maxRing: '最長響鈴',
     alarmEnabled: '啟用鬧鐘',
-    version: '版本',
     outputs: 'MCU 輸出',
     mainLeds: '主 LED',
     flashLed: '閃爍 LED',
@@ -453,11 +450,10 @@ export default function App() {
     return () => navigator.serial.removeEventListener('disconnect', handleDisconnect);
   }, []);
 
-  function bumpVersion(patch = {}) {
+  function updateConfig(patch = {}) {
     setConfig((current) => ({
       ...current,
-      ...patch,
-      version: current.version + 1
+      ...patch
     }));
   }
 
@@ -616,6 +612,18 @@ export default function App() {
     throw lastError || new Error('No Codex MCU replied on USB serial.');
   }
 
+  async function ensureUsbConnected() {
+    if (serialPortRef.current?.writable) return;
+
+    const { reply } = await connectToUsbMcu();
+    setUsbState({
+      connected: true,
+      supported: true,
+      label: 'Connected',
+      detail: reply.replace(/\s+/g, ' ')
+    });
+  }
+
   async function connectUsb() {
     if (!usbState.supported) {
       setUsbState((current) => ({
@@ -749,10 +757,22 @@ export default function App() {
 
   async function saveUsbConfig() {
     try {
-      await withUsbBusy(() => applyUsbConfig());
+      await withUsbBusy(async () => {
+        await ensureUsbConnected();
+        await applyUsbConfig({ quiet: true, keepConnectedOnError: true });
+        await closeUsbPort();
+        setUsbState((current) => ({
+          ...current,
+          connected: false,
+          label: 'Settings saved',
+          detail: 'Settings saved to MCU, USB port closed.'
+        }));
+      });
     } catch (error) {
+      await closeUsbPort();
       setUsbState((current) => ({
         ...current,
+        connected: false,
         label: 'Apply failed',
         detail: error.message
       }));
@@ -806,8 +826,7 @@ export default function App() {
 
       setConfig((current) => ({
         ...current,
-        ...nextConfig,
-        version: Number(body.version) || current.version
+        ...nextConfig
       }));
       setTimeCompare({
         mcuEpoch,
@@ -847,7 +866,7 @@ export default function App() {
         flashLedBrightness: config.flashLedBrightness
       };
       await writeUsbLine(`set_config ${JSON.stringify(body)}`);
-      const reply = await expectUsbReply('usb_config_', 1800);
+      const reply = await expectUsbReply('usb_config_', 6000);
       if (!options.quiet) {
         setUsbState((current) => ({
           ...current,
@@ -858,7 +877,7 @@ export default function App() {
     } catch (error) {
       setUsbState((current) => ({
         ...current,
-        connected: options.keepConnectedOnError ? current.connected : false,
+        connected: current.connected,
         label: 'Apply failed',
         detail: error.message
       }));
@@ -898,7 +917,7 @@ export default function App() {
                 <TimeField
                   hour={config.hour}
                   minute={config.minute}
-                  onChange={(patch) => bumpVersion(patch)}
+                  onChange={(patch) => updateConfig(patch)}
                 />
               </div>
               <div>
@@ -910,7 +929,7 @@ export default function App() {
                       <button
                         key={bit}
                         type="button"
-                        onClick={() => bumpVersion({ repeatMask: config.repeatMask ^ (1 << bit) })}
+                        onClick={() => updateConfig({ repeatMask: config.repeatMask ^ (1 << bit) })}
                         className={`h-14 min-w-0 rounded-md border text-sm font-semibold transition ${
                           selected
                             ? 'border-teal-700 bg-teal-700 text-white'
@@ -926,25 +945,24 @@ export default function App() {
             </div>
 
             <div className="mt-5 grid gap-4 sm:grid-cols-3">
-              <RangeField label={t.prealert} unit="sec" value={config.prealertSec} onChange={(value) => bumpVersion({ prealertSec: value })} />
-              <RangeField label={t.snooze} unit="min" value={config.snoozeMin} onChange={(value) => bumpVersion({ snoozeMin: value })} />
-              <RangeField label={t.maxRing} unit="sec" value={config.maxRingSec} onChange={(value) => bumpVersion({ maxRingSec: value })} />
+              <RangeField label={t.prealert} unit="sec" value={config.prealertSec} onChange={(value) => updateConfig({ prealertSec: value })} />
+              <RangeField label={t.snooze} unit="min" value={config.snoozeMin} onChange={(value) => updateConfig({ snoozeMin: value })} />
+              <RangeField label={t.maxRing} unit="sec" value={config.maxRingSec} onChange={(value) => updateConfig({ maxRingSec: value })} />
             </div>
 
             <div className="mt-5 flex items-center justify-between border-t border-stone-200 pt-4">
               <div>
                 <div className="text-sm font-semibold">{t.alarmEnabled}</div>
-                <div className="text-sm text-stone-500">{t.version} {config.version}</div>
               </div>
-              <Toggle checked={config.enabled} onClick={() => bumpVersion({ enabled: !config.enabled })} />
+              <Toggle checked={config.enabled} onClick={() => updateConfig({ enabled: !config.enabled })} />
             </div>
           </Panel>
 
           <Panel title={t.outputs}>
             <div className="grid gap-4 md:grid-cols-3">
-              <RangeField label={t.mainLeds} unit="/10" value={config.ledPairBrightness} onChange={(value) => bumpVersion({ ledPairBrightness: value })} />
-              <RangeField label={t.flashLed} unit="/10" value={config.flashLedBrightness} onChange={(value) => bumpVersion({ flashLedBrightness: value })} />
-              <RangeField label={t.haptic} unit="/10" value={config.hapticEffect} onChange={(value) => bumpVersion({ hapticEffect: value })} />
+              <RangeField label={t.mainLeds} unit="/10" value={config.ledPairBrightness} onChange={(value) => updateConfig({ ledPairBrightness: value })} />
+              <RangeField label={t.flashLed} unit="/10" value={config.flashLedBrightness} onChange={(value) => updateConfig({ flashLedBrightness: value })} />
+              <RangeField label={t.haptic} unit="/10" value={config.hapticEffect} onChange={(value) => updateConfig({ hapticEffect: value })} />
             </div>
           </Panel>
         </section>
@@ -972,7 +990,7 @@ export default function App() {
                     <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.connected || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected && !usbBusy ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
                       {t.time}
                     </button>
-                    <button type="button" onClick={saveUsbConfig} disabled={!usbState.connected || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.connected && !usbBusy ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                    <button type="button" onClick={saveUsbConfig} disabled={!usbState.supported || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
                       {t.apply}
                     </button>
                   </div>
