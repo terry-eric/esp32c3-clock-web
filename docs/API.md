@@ -60,7 +60,7 @@ The local notifier can sync time without the web console:
 python scripts\notify_mcu.py --mode usb --state sync-time
 ```
 
-Normal `busy` and `done` notifier commands also send `set_time` first unless `--no-sync-time` is passed. The notifier requires the `codex_ping` reply to match the expected device id before it sends time or status commands.
+Normal `message-sent`/`busy` and `answer-done`/`done` notifier commands also send `set_time` first unless `--no-sync-time` is passed. `message-sent` maps to `codex_busy`; `answer-done` maps to `notify_done`. The notifier requires the `codex_ping` reply to match the expected device id before it sends time or status commands.
 
 The console command buttons are editable. Button labels, command mappings, and light-pattern settings are saved in browser storage and reused for later clicks/page loads. MCU alarm/output settings are still persisted on the device through `set_config`.
 

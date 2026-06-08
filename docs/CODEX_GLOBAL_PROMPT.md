@@ -11,7 +11,7 @@ $env:MCU_NOTIFY_MODE="usb"
 $env:MCU_NOTIFY_PORT=""
 $env:MCU_NOTIFY_DEVICE_ID="alarm_c3_001"
 $env:MCU_NOTIFY_EFFECT="10"
-$env:MCU_NOTIFY_STATE="done"
+$env:MCU_NOTIFY_STATE="answer-done"
 ```
 
 Leave `MCU_NOTIFY_PORT` empty to scan COM ports. The notifier only sends commands after `codex_ping` returns the expected `MCU_NOTIFY_DEVICE_ID`.
@@ -27,20 +27,20 @@ Create:
 Content:
 
 ````markdown
-When a concrete coding task starts, notify the ESP32-C3 MCU over USB by running:
+After you receive a user message that you will answer in this workspace, notify the ESP32-C3 MCU over USB by running:
 
 ```powershell
-python scripts\notify_mcu.py --mode usb --state busy
+python scripts\notify_mcu.py --mode usb --state message-sent
 ```
 
-When the coding task is complete and verification is finished, notify the ESP32-C3 MCU over USB by running:
+After your answer is complete, and after any requested checks, commits, or pushes are finished, notify the ESP32-C3 MCU over USB by running:
 
 ```powershell
-python scripts\notify_mcu.py --mode usb --state done
+python scripts\notify_mcu.py --mode usb --state answer-done
 ```
 
 Only run this inside the `esp32c3-clock-web` workspace or another workspace that has `scripts/notify_mcu.py`.
-Do not run the notifier for casual chat replies. If USB notification fails once, report the failure briefly and do not retry repeatedly.
+If USB notification fails once, report the failure briefly and do not retry repeatedly.
 ````
 
 ## User-Level AGENTS.md
@@ -48,17 +48,17 @@ Do not run the notifier for casual chat replies. If USB notification fails once,
 For automatic behavior, add this to the user-level `AGENTS.md`, adjusting the script path for the local machine:
 
 ````markdown
-When starting a concrete coding task, run:
+After receiving a user message that you will answer in this workspace, run:
 
 ```powershell
-python "C:\path\to\esp32c3-clock-web\scripts\notify_mcu.py" --mode usb --state busy
+python "C:\path\to\esp32c3-clock-web\scripts\notify_mcu.py" --mode usb --state message-sent
 ```
 
-After successfully completing a coding task, and only after requested tests/checks/commit/push are done, run:
+After completing the answer, and only after requested tests/checks/commit/push are done, run:
 
 ```powershell
-python "C:\path\to\esp32c3-clock-web\scripts\notify_mcu.py" --mode usb --state done --effect 10
+python "C:\path\to\esp32c3-clock-web\scripts\notify_mcu.py" --mode usb --state answer-done --effect 10
 ```
 
-Do not run the notifier for casual chat replies. If the USB notification fails once, summarize the failure and stop.
+If the USB notification fails once, summarize the failure and stop.
 ````

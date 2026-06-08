@@ -1,15 +1,27 @@
 # ESP32-C3 Alarm Project Instructions
 
-After successfully completing a coding task in this project, and only after requested checks, commits, or pushes are finished, notify the ESP32-C3 MCU by running:
+After receiving a user message that you will answer in this project, notify the ESP32-C3 MCU by running:
 
 ```powershell
-python scripts\notify_mcu.py
+python scripts\notify_mcu.py --state message-sent
 ```
 
 If `python` is unavailable, try:
 
 ```powershell
-py scripts\notify_mcu.py
+py scripts\notify_mcu.py --state message-sent
+```
+
+After successfully completing the answer, and only after requested checks, commits, or pushes are finished, notify the ESP32-C3 MCU by running:
+
+```powershell
+python scripts\notify_mcu.py --state answer-done
+```
+
+If `python` is unavailable, try:
+
+```powershell
+py scripts\notify_mcu.py --state answer-done
 ```
 
 The notifier uses auto-detected USB serial. Use only these local environment variables:

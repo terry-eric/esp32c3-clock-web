@@ -36,6 +36,18 @@ def env_bool(name, default):
     return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
+def normalize_state(state):
+    aliases = {
+        "message-sent": "busy",
+        "sent": "busy",
+        "answer-done": "done",
+        "answered": "done",
+        "complete": "done",
+        "completed": "done",
+    }
+    return aliases.get(state, state)
+
+
 def ping_matcher(device_id):
     device_id = (device_id or "").strip()
     return f"codex_pong {device_id}" if device_id else "codex_pong"
@@ -269,17 +281,34 @@ def main():
     parser.add_argument("--mode", choices=["usb"], default=os.environ.get("MCU_NOTIFY_MODE", "usb"))
     parser.add_argument("--port", default=os.environ.get("MCU_NOTIFY_PORT", ""), help="USB serial port, for example COM4")
     parser.add_argument("--device-id", default=os.environ.get("MCU_NOTIFY_DEVICE_ID", "alarm_c3_001"), help="Expected MCU device id from codex_pong")
-    parser.add_argument("--state", choices=["busy", "done", "idle", "keepalive", "sync-time"], default=os.environ.get("MCU_NOTIFY_STATE", "done"))
+    parser.add_argument(
+        "--state",
+        choices=[
+            "busy",
+            "done",
+            "idle",
+            "keepalive",
+            "sync-time",
+            "message-sent",
+            "sent",
+            "answer-done",
+            "answered",
+            "complete",
+            "completed",
+        ],
+        default=os.environ.get("MCU_NOTIFY_STATE", "done"),
+    )
     parser.add_argument("--effect", type=int, default=int(os.environ.get("MCU_NOTIFY_EFFECT", "10")), help="Haptic effect, 0-10")
-    parser.add_argument("--no-sync-time", action="store_false", dest="sync_time", default=env_bool("MCU_SYNC_TIME_BEFORE_NOTIFY", True), help="Skip set_time before busy/done notification")
+    parser.add_argument("--no-sync-time", action="store_false", dest="sync_time", default=env_bool("MCU_SYNC_TIME_BEFORE_NOTIFY", True), help="Skip set_time before message-sent/busy or answer-done/done notification")
     args = parser.parse_args()
 
     effect = clamp_effect(args.effect)
-    if args.state == "sync-time":
+    state = normalize_state(args.state)
+    if state == "sync-time":
         sync_usb_time_auto(args.port, args.device_id)
         return
 
-    notify_usb_auto(args.port, args.state, effect, args.sync_time, args.device_id)
+    notify_usb_auto(args.port, state, effect, args.sync_time, args.device_id)
 
 
 if __name__ == "__main__":

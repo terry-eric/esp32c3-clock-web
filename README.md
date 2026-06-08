@@ -75,14 +75,16 @@ Codex/Gemini can notify the MCU when a coding task is done:
 python scripts\notify_mcu.py --mode usb
 ```
 
-Use `--state busy` when Codex starts a coding task and `--state done` when the task finishes:
+Use `--state message-sent` after Codex/Gemini receives your prompt, and `--state answer-done` after the answer is complete:
 
 ```powershell
-python scripts\notify_mcu.py --mode usb --state busy
-python scripts\notify_mcu.py --mode usb --state done
+python scripts\notify_mcu.py --mode usb --state message-sent
+python scripts\notify_mcu.py --mode usb --state answer-done
 ```
 
-By default, the notifier sends `set_time` before `busy` and `done`, so Codex status notifications also refresh the MCU clock. The MCU resets its USB time-sync timer when `set_time` succeeds. Add `--no-sync-time` if you only want to send the status command.
+`message-sent` is an alias for the MCU busy light (`codex_busy`). `answer-done` is an alias for the done alert (`notify_done`). The older `busy` and `done` names still work.
+
+By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. The MCU resets its USB time-sync timer when `set_time` succeeds. Add `--no-sync-time` if you only want to send the status command.
 
 Optional local `.env`:
 
