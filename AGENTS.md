@@ -1,6 +1,6 @@
 # ESP32-C3 Alarm Project Instructions
 
-After receiving a user message that you will answer in this project, notify the ESP32-C3 MCU by running:
+After receiving any user message that you will answer in this project, including casual conversation, notify the ESP32-C3 MCU by running:
 
 ```powershell
 python scripts\notify_mcu.py --state message-sent

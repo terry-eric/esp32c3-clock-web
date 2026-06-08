@@ -320,7 +320,9 @@ void allLedOff() {
 }
 
 bool shouldShowUsbTimePrompt() {
-  return !timeOK && lastUsbSeenMs > 0 && millis() - lastUsbSeenMs <= USB_TIME_SYNC_PROMPT_MS;
+  if (timeOK) return false;
+  if (lastUsbTimeSyncMs == 0) return true;
+  return lastUsbSeenMs > 0 && millis() - lastUsbSeenMs <= USB_TIME_SYNC_PROMPT_MS;
 }
 
 void previewLedBrightness() {

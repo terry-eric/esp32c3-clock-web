@@ -27,7 +27,7 @@ Create:
 Content:
 
 ````markdown
-After you receive a user message that you will answer in this workspace, notify the ESP32-C3 MCU over USB by running:
+After you receive any user message that you will answer in this workspace, including casual conversation, notify the ESP32-C3 MCU over USB by running:
 
 ```powershell
 python scripts\notify_mcu.py --mode usb --state message-sent
@@ -48,7 +48,7 @@ If USB notification fails once, report the failure briefly and do not retry repe
 For automatic behavior, add this to the user-level `AGENTS.md`, adjusting the script path for the local machine:
 
 ````markdown
-After receiving a user message that you will answer in this workspace, run:
+After receiving any user message that you will answer in this workspace, including casual conversation, run:
 
 ```powershell
 python "C:\path\to\esp32c3-clock-web\scripts\notify_mcu.py" --mode usb --state message-sent

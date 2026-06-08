@@ -67,15 +67,15 @@ set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightne
 `set_config` writes changed settings to ESP32 NVS so they survive reboot and power loss.
 `set_time` uses Unix epoch seconds from the computer/browser. It replaces NTP for normal use.
 
-## Codex Done Notification
+## Codex Conversation Notification
 
-Codex/Gemini can notify the MCU when a coding task is done:
+Codex/Gemini can notify the MCU for normal conversation status:
 
 ```powershell
 python scripts\notify_mcu.py --mode usb
 ```
 
-Use `--state message-sent` after Codex/Gemini receives your prompt, and `--state answer-done` after the answer is complete:
+Use `--state message-sent` after Codex/Gemini receives any prompt it will answer, and `--state answer-done` after the answer is complete:
 
 ```powershell
 python scripts\notify_mcu.py --mode usb --state message-sent
@@ -84,7 +84,7 @@ python scripts\notify_mcu.py --mode usb --state answer-done
 
 `message-sent` is an alias for the MCU busy light (`codex_busy`). `answer-done` is an alias for the done alert (`notify_done`). The older `busy` and `done` names still work.
 
-By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. Add `--no-sync-time` if you only want to send the status command. If USB is opened but time is still invalid, the MCU only flashes the red time-sync prompt briefly after that USB interaction.
+By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. Add `--no-sync-time` if you only want to send the status command. On fresh power-up, the MCU flashes the red time-sync prompt until USB time sync succeeds. After one successful sync, it does not keep blinking just because the previous sync became old.
 
 Optional local `.env`:
 
