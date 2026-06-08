@@ -877,12 +877,12 @@ export default function App() {
   return (
     <main className="min-h-screen bg-[#f4f5f0] text-stone-950">
       <header className="border-b border-stone-300 bg-[#e8eadf]">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700">{t.console}</p>
             <h1 className="mt-1 text-2xl font-semibold">Codex Done Light</h1>
           </div>
-          <div className="grid grid-cols-4 gap-2 text-center text-xs sm:min-w-[410px]">
+          <div className="grid grid-cols-2 gap-2 text-center text-xs sm:min-w-[410px] sm:grid-cols-4">
             <StatusPill label={t.alarm} value={config.enabled ? t.on : t.off} active={config.enabled} />
             <StatusPill label={t.time} value={alarmTime} />
             <StatusPill label={t.control} value="USB" active />
@@ -897,10 +897,74 @@ export default function App() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(360px,0.9fr)]">
-        <section className="min-w-0 space-y-5">
+      <div className="mx-auto grid max-w-6xl gap-4 px-4 py-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <section className="min-w-0 space-y-4">
+          <Panel title={t.notify}>
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
+                    <div className="min-w-0 text-sm font-semibold">USB {localizeUsbStatus(usbState.label, language)}</div>
+                  </div>
+                  {usbState.detail ? (
+                    <div className="mt-1 line-clamp-2 text-xs leading-5 text-stone-500" title={usbState.detail}>
+                      {usbState.detail}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="mt-4 grid min-w-0 grid-cols-3 gap-2">
+                <button type="button" onClick={connectUsb} className="h-11 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
+                  {t.connect}
+                </button>
+                <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.supported || usbBusy} className={`h-11 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
+                  {t.time}
+                </button>
+                <button type="button" onClick={saveUsbConfig} disabled={!usbState.supported || usbBusy} className={`h-11 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                  {t.apply}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-2 text-sm">
+                <TimeCompareItem label={t.mcuTime} value={timeCompare.mcuText || formatEpoch(timeCompare.mcuEpoch) || t.timeUnknown} />
+                <TimeCompareItem label={t.computerTime} value={timeCompare.pcText || t.timeUnknown} />
+                <TimeCompareItem label={t.timeDelta} value={formatDelta(timeCompare.deltaSec, language)} strong />
+              </div>
+
+              <div className="mt-4 border-t border-stone-200 pt-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <FieldLabel>{t.usbCommand}</FieldLabel>
+                  <span className="text-xs font-semibold text-teal-700">{t.appliesFirst}</span>
+                </div>
+                <div className="grid min-w-0 grid-cols-2 gap-2">
+                  {commandActions.map((action) => (
+                    <button
+                      key={action.id}
+                      type="button"
+                      onClick={() => sendUsbCommand(action)}
+                      disabled={!usbState.supported || usbBusy}
+                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${
+                        selectedActionId === action.id && usbState.supported && !usbBusy
+                          ? 'border-teal-700 bg-teal-700 text-white'
+                          : usbState.supported && !usbBusy
+                            ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
+                            : 'border-stone-200 bg-stone-100 text-stone-400'
+                      }`}
+                    >
+                      {action.labels[language]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Panel>
+        </section>
+
+        <section className="min-w-0 space-y-4">
           <Panel title={t.alarm}>
-            <div className="grid gap-4 md:grid-cols-[230px_minmax(0,1fr)]">
+            <div className="grid gap-4 md:grid-cols-[210px_minmax(0,1fr)]">
               <div>
                 <FieldLabel>{t.time}</FieldLabel>
                 <TimeField
@@ -933,13 +997,13 @@ export default function App() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <RangeField label={t.prealert} unit="sec" value={config.prealertSec} onChange={(value) => updateConfig({ prealertSec: value })} />
               <RangeField label={t.snooze} unit="min" value={config.snoozeMin} onChange={(value) => updateConfig({ snoozeMin: value })} />
               <RangeField label={t.maxRing} unit="sec" value={config.maxRingSec} onChange={(value) => updateConfig({ maxRingSec: value })} />
             </div>
 
-            <div className="mt-5 flex items-center justify-between border-t border-stone-200 pt-4">
+            <div className="mt-4 flex items-center justify-between border-t border-stone-200 pt-4">
               <div>
                 <div className="text-sm font-semibold">{t.alarmEnabled}</div>
               </div>
@@ -948,78 +1012,19 @@ export default function App() {
           </Panel>
 
           <Panel title={t.outputs}>
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-3">
               <RangeField label={t.mainLeds} unit="/10" value={config.ledPairBrightness} onChange={(value) => updateConfig({ ledPairBrightness: value })} />
               <RangeField label={t.flashLed} unit="/10" value={config.flashLedBrightness} onChange={(value) => updateConfig({ flashLedBrightness: value })} />
               <RangeField label={t.haptic} unit="/10" value={config.hapticEffect} onChange={(value) => updateConfig({ hapticEffect: value })} />
             </div>
           </Panel>
-        </section>
 
-        <aside className="min-w-0 space-y-5">
-          <Panel title={t.notify}>
-            <div className="grid gap-3">
-              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
-                <div className="flex min-w-0 flex-col gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className={`h-2.5 w-2.5 rounded-full ${usbState.connected ? 'bg-teal-600' : 'bg-stone-300'}`} />
-                      <div className="text-sm font-semibold">USB {localizeUsbStatus(usbState.label, language)}</div>
-                    </div>
-                    {usbState.detail ? (
-                      <div className="mt-1 max-w-[360px] truncate text-xs text-stone-500" title={usbState.detail}>
-                        {usbState.detail}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="grid min-w-0 grid-cols-3 gap-2">
-                    <button type="button" onClick={connectUsb} className="h-10 min-w-0 rounded-md bg-stone-900 px-3 text-sm font-semibold text-white">
-                      {t.connect}
-                    </button>
-                    <button type="button" onClick={syncAndLoadUsbTime} disabled={!usbState.supported || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-white text-stone-700 ring-1 ring-stone-300' : 'bg-stone-200 text-stone-400'}`}>
-                      {t.time}
-                    </button>
-                    <button type="button" onClick={saveUsbConfig} disabled={!usbState.supported || usbBusy} className={`h-10 min-w-0 rounded-md px-3 text-sm font-semibold ${usbState.supported && !usbBusy ? 'bg-teal-700 text-white' : 'bg-stone-200 text-stone-400'}`}>
-                      {t.apply}
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 border-t border-stone-200 pt-3 text-sm sm:grid-cols-3">
-                  <TimeCompareItem label={t.mcuTime} value={timeCompare.mcuText || formatEpoch(timeCompare.mcuEpoch) || t.timeUnknown} />
-                  <TimeCompareItem label={t.computerTime} value={timeCompare.pcText || t.timeUnknown} />
-                  <TimeCompareItem label={t.timeDelta} value={formatDelta(timeCompare.deltaSec, language)} strong />
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <FieldLabel>{t.usbCommand}</FieldLabel>
-                  <span className="text-xs font-semibold text-teal-700">{t.appliesFirst}</span>
-                </div>
-                <div className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-3">
-                  {commandActions.map((action) => (
-                    <button
-                      key={action.id}
-                      type="button"
-                      onClick={() => sendUsbCommand(action)}
-                      disabled={!usbState.supported || usbBusy}
-                      className={`h-10 rounded-md border px-2 text-sm font-semibold ${
-                        selectedActionId === action.id && usbState.supported && !usbBusy
-                          ? 'border-teal-700 bg-teal-700 text-white'
-                          : usbState.supported && !usbBusy
-                            ? 'border-stone-300 bg-white text-stone-600 hover:border-stone-500'
-                            : 'border-stone-200 bg-stone-100 text-stone-400'
-                      }`}
-                    >
-                      {action.labels[language]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
+          <details className="min-w-0 rounded-md border border-stone-300 bg-[#fbfbf7] p-4 shadow-sm">
+            <summary className="cursor-pointer text-base font-semibold">{language === 'zh' ? '\u9032\u968e' : 'Advanced'}</summary>
+            <div className="mt-4 grid gap-4">
+              <div className="min-w-0">
                 <FieldLabel>{t.commandPattern}: {selectedAction.labels[language]}</FieldLabel>
-                <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   <PatternSelect label={t.greenLed} value={selectedAction.pattern.green} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { green: value })} />
                   <PatternSelect label={t.redLed} value={selectedAction.pattern.red} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { red: value })} />
                   <PatternSelect label={t.flashLedShort} value={selectedAction.pattern.flash} language={language} onChange={(value) => updateCommandPattern(selectedAction.id, { flash: value })} />
@@ -1043,26 +1048,27 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-md border border-stone-300 bg-white p-4">
-                <FieldLabel>{t.commandBehavior}</FieldLabel>
-                <div className="divide-y divide-stone-200">
-                  {usbCommandCatalog.map(([command, behavior]) => (
-                    <div key={command} className="grid min-w-0 gap-1 py-2 sm:grid-cols-[120px_minmax(0,1fr)]">
-                      <code className="min-w-0 text-xs font-semibold text-teal-700">{command}</code>
-                      <div className="min-w-0 text-xs leading-5 text-stone-600">{behavior[language]}</div>
-                    </div>
-                  ))}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="min-w-0">
+                  <FieldLabel>{t.commandBehavior}</FieldLabel>
+                  <div className="max-h-[260px] divide-y divide-stone-200 overflow-auto rounded-md border border-stone-200 bg-white px-3">
+                    {usbCommandCatalog.map(([command, behavior]) => (
+                      <div key={command} className="grid min-w-0 gap-1 py-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+                        <code className="min-w-0 text-xs font-semibold text-teal-700">{command}</code>
+                        <div className="min-w-0 text-xs leading-5 text-stone-600">{behavior[language]}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="min-w-0">
+                  <FieldLabel>{t.payload}</FieldLabel>
+                  <pre className="max-h-[260px] overflow-auto rounded-md bg-stone-950 p-3 text-xs text-stone-100">{jsonText}</pre>
                 </div>
               </div>
             </div>
-          </Panel>
-
-          <Panel title={t.payload}>
-            <div className="space-y-3">
-              <pre className="max-h-[340px] overflow-auto rounded-md bg-stone-950 p-3 text-xs text-stone-100">{jsonText}</pre>
-            </div>
-          </Panel>
-        </aside>
+          </details>
+        </section>
       </div>
     </main>
   );
