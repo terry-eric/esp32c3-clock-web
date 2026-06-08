@@ -69,7 +69,7 @@ The console command buttons are editable. Button labels, command mappings, and l
 | Command | Behavior |
 | --- | --- |
 | `codex_ping` | Probes the MCU and returns `codex_pong alarm_c3_001 Codex Done Light`. |
-| `usb_keepalive` | Keeps the serial session active. Red blink is based on USB time sync failure/staleness, not keepalive loss. |
+| `usb_keepalive` | Keeps the serial session active. If USB is opened while MCU time is invalid, the red time-sync prompt only blinks briefly after that USB interaction. |
 | `set_time` | Sets the MCU clock from Unix epoch seconds. |
 | `get_config` | Returns `usb_config_json {...}` with the current MCU NVS-backed alarm/output settings plus `epoch` and `timeText` for browser/computer time comparison. |
 | `set_config` | Applies alarm/output fields and writes changed values to NVS. |

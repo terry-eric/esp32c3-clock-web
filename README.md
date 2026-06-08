@@ -84,7 +84,7 @@ python scripts\notify_mcu.py --mode usb --state answer-done
 
 `message-sent` is an alias for the MCU busy light (`codex_busy`). `answer-done` is an alias for the done alert (`notify_done`). The older `busy` and `done` names still work.
 
-By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. The MCU resets its USB time-sync timer when `set_time` succeeds. Add `--no-sync-time` if you only want to send the status command.
+By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. Add `--no-sync-time` if you only want to send the status command. If USB is opened but time is still invalid, the MCU only flashes the red time-sync prompt briefly after that USB interaction.
 
 Optional local `.env`:
 

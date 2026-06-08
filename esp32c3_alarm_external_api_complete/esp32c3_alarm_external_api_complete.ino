@@ -117,7 +117,7 @@ const bool TOUCH_ACTIVE_HIGH = false;
 // ============================================================
 
 const unsigned long HEARTBEAT_PRINT_INTERVAL_MS   = 10000;
-const unsigned long USB_TIME_SYNC_TIMEOUT_MS      = 65UL * 60UL * 1000UL;
+const unsigned long USB_TIME_SYNC_PROMPT_MS       = 15000;
 
 const unsigned long BUTTON_DEBOUNCE_MS            = 35;
 const unsigned long LONG_PRESS_MS                 = 2000;
@@ -319,8 +319,8 @@ void allLedOff() {
   writeLedFlash(false);
 }
 
-bool usbTimeRecentlySynced() {
-  return timeOK && lastUsbTimeSyncMs > 0 && millis() - lastUsbTimeSyncMs <= USB_TIME_SYNC_TIMEOUT_MS;
+bool shouldShowUsbTimePrompt() {
+  return !timeOK && lastUsbSeenMs > 0 && millis() - lastUsbSeenMs <= USB_TIME_SYNC_PROMPT_MS;
 }
 
 void previewLedBrightness() {
@@ -1316,7 +1316,7 @@ void updateButton() {
 void updateLedPattern() {
   unsigned long nowMs = millis();
 
-  if ((stateNow == STATE_IDLE || stateNow == STATE_TIME_INVALID || stateNow == STATE_BOOT) && !usbTimeRecentlySynced()) {
+  if ((stateNow == STATE_IDLE || stateNow == STATE_TIME_INVALID || stateNow == STATE_BOOT) && shouldShowUsbTimePrompt()) {
     writeStatusGreen(false);
     writeStatusRed((nowMs / 500) % 2);
     writeLedFlash(false);
@@ -1348,7 +1348,7 @@ void updateLedPattern() {
 
     case STATE_TIME_INVALID:
       writeLedA(false);
-      writeLedB((nowMs / 1000) % 2);
+      writeLedB(false);
       writeLedFlash(false);
       break;
 

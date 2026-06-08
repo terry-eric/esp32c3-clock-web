@@ -18,7 +18,7 @@ flowchart TD
   D --> E["Turn Wi-Fi off"]
   E --> F{"Time OK and driver OK?"}
   F -- "Yes" --> G["Enter IDLE"]
-  F -- "No time" --> H["Enter TIME_INVALID until USB time sync"]
+  F -- "No time" --> H["Enter TIME_INVALID quietly until USB time sync"]
   F -- "Driver failed" --> I["Enter DRV_FAIL"]
 ```
 
@@ -53,7 +53,7 @@ set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightne
 run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink","haptic":"on","intervalMs":180,"count":6}
 ```
 
-`usb_keepalive` keeps the serial session active. The MCU blinks the red status LED when USB time sync has not succeeded yet or has not refreshed within about 65 minutes.
+`usb_keepalive` keeps the serial session active. If USB is opened while MCU time is invalid, the MCU blinks the red time-sync prompt briefly after that USB interaction. It does not keep blinking just because a previous time sync became old.
 `get_config` returns the current MCU config so the web console can use the device values as defaults after connecting.
 `run_pattern` runs editable green/red/flash LED and haptic behavior with configurable mode, interval, and count.
 `codex_busy` shows solid red while Codex is working. `notify_done` clears busy, flashes/vibrates, then shows solid green. `codex_idle` clears the Codex status light. In `scripts/notify_mcu.py`, `message-sent` maps to `codex_busy` and `answer-done` maps to `notify_done`, so Codex can alert once after receiving a prompt and again after finishing the answer.
