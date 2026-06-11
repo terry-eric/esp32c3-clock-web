@@ -340,15 +340,7 @@ function delay(ms) {
 
 function estimateHapticWaitMs(effect) {
   if (effect <= 0) return 0;
-  if (effect <= 3) return 300;
-  if (effect === 4) return 420;
-  if (effect === 5) return 560;
-  if (effect === 6) return 900;
-  if (effect === 7) return 1120;
-  if (effect === 8) return 680;
-  if (effect === 9) return 900;
-  if (effect === 10) return 1100;
-  return 520;
+  return 160 + Math.min(10, Math.max(1, effect)) * 24;
 }
 
 function estimatePatternTimeoutMs(body) {
@@ -361,7 +353,7 @@ function estimatePatternTimeoutMs(body) {
       ? count
       : Math.ceil(count / 2);
   const hapticMs = hapticPulses * estimateHapticWaitMs(Number(body.hapticEffect) || 0);
-  const testHapticMs = body.command === 'test_haptic' && hapticOn ? 4200 : 0;
+  const testHapticMs = body.command === 'test_haptic' && hapticOn ? estimateHapticWaitMs(Number(body.hapticEffect) || 0) : 0;
   return intervalMs * count + hapticMs + testHapticMs + 2500;
 }
 
@@ -664,7 +656,7 @@ export default function App() {
         await applyUsbConfig({ quiet: true, keepConnectedOnError: true });
         const hapticEffect = action.pattern.haptic === 'off'
           ? 0
-          : Math.max(1, config.hapticEffect);
+          : config.hapticEffect;
         const body = {
           command: action.command,
           green: action.pattern.green,

@@ -73,12 +73,12 @@ The console command buttons are editable. Button labels, command mappings, and l
 | `set_time` | Sets the MCU clock from Unix epoch seconds. |
 | `get_config` | Returns `usb_config_json {...}` with the current MCU NVS-backed alarm/output settings plus `epoch` and `timeText` for browser/computer time comparison. |
 | `set_config` | Applies alarm/output fields and writes changed values to NVS. |
-| `run_pattern` | Runs editable green/red/flash LED and haptic behavior, then applies the selected command status. |
+| `run_pattern` | Runs editable green/red/flash LED and haptic behavior, then applies the selected command status. Haptic values 0-10 are strength levels. |
 | `codex_busy` | Shows solid red while Codex is working. |
 | `notify_done` | Clears busy, flashes/vibrates, then shows solid green. |
 | `codex_idle` | Clears Codex red/green status and returns to normal LED patterns. |
 | `test_led` | Runs the LED hardware test with current brightness settings. |
-| `test_haptic` | Plays one haptic effect using current haptic settings. |
+| `test_haptic` | Plays one haptic pulse using the current 0-10 haptic strength. |
 | `stop_alarm` | Stops the active alarm. |
 | `snooze` | Snoozes only while alarm/pre-alert is active. |
 

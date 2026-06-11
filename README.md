@@ -66,6 +66,7 @@ set_config {"enabled":true,"hour":7,"minute":30,"repeatMask":62,"ledPairBrightne
 
 `set_config` writes changed settings to ESP32 NVS so they survive reboot and power loss.
 `set_time` uses Unix epoch seconds from the computer/browser. It replaces NTP for normal use.
+`hapticEffect` is a 0-10 strength level. Level 0 disables haptic output; levels 1-10 drive the DRV2605L in realtime mode from weak to strong.
 
 ## Codex Conversation Notification
 
@@ -93,7 +94,7 @@ MCU_NOTIFY_MODE=usb
 MCU_NOTIFY_PORT=
 MCU_NOTIFY_DEVICE_ID=alarm_c3_001
 MCU_NOTIFY_EFFECT=10
-MCU_NOTIFY_STATE=done
+MCU_NOTIFY_STATE=answer-done
 MCU_SYNC_TIME_BEFORE_NOTIFY=true
 ```
 

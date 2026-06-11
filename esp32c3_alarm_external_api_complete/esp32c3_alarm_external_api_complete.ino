@@ -124,7 +124,6 @@ const unsigned long LONG_PRESS_MS                 = 2000;
 
 const unsigned long HAPTIC_REPEAT_MS              = 900;
 const unsigned long PREALARM_HAPTIC_INTERVAL_MS   = 15000;
-const unsigned long HAPTIC_RTP_PULSE_MS           = 150;
 const unsigned long HAPTIC_WAVEFORM_WAIT_MS       = 520;
 const unsigned long DRV_RETRY_INTERVAL_MS         = 2000;
 
@@ -403,57 +402,47 @@ bool ensureHapticDriver() {
   return beginHapticDriver(false);
 }
 
+uint8_t hapticLevelToDrive(uint8_t level) {
+  return (uint8_t)map(constrain(level, 1, 10), 1, 10, 70, 255);
+}
+
+unsigned long hapticLevelPulseMs(uint8_t level) {
+  return (unsigned long)map(constrain(level, 1, 10), 1, 10, 80, 260);
+}
+
 uint8_t hapticEffectToWaveform(uint8_t effect) {
   if (effect == 0) return 0;
-
-  // UI levels 1-10 are mapped to DRV2605 ROM effects that feel like
-  // stronger notification clicks/buzzes instead of raw motor power steps.
-  static const uint8_t waveformByLevel[] = {
-    0,   // unused
-    4,   // sharp click 100%
-    1,   // strong click 100%
-    10,  // double click 100%
-    12,  // triple click 100%
-    14,  // strong buzz
-    15,  // 750 ms alert
-    16,  // 1000 ms alert
-    47,  // buzz / transition
-    52,  // pulsing strong
-    64   // strong notification buzz
-  };
-
-  if (effect <= 10) {
-    return waveformByLevel[effect];
-  }
 
   return constrain(effect, 1, 123);
 }
 
-uint8_t hapticEffectToFollowUpWaveform(uint8_t effect, uint8_t slot) {
-  if (effect > 10 || slot == 0) return 0;
-
-  static const uint8_t followUp1ByLevel[] = {
-    0, 0, 0, 0, 4, 1, 1, 14, 14, 15, 16
-  };
-  static const uint8_t followUp2ByLevel[] = {
-    0, 0, 0, 0, 0, 0, 4, 1, 1, 14, 14
-  };
-
-  return slot == 1 ? followUp1ByLevel[effect] : followUp2ByLevel[effect];
-}
-
 unsigned long hapticEffectWaitMs(uint8_t effect) {
-  if (effect <= 3) return 300;
-  if (effect == 4) return 420;
-  if (effect == 5) return 560;
-  if (effect == 6) return 900;
-  if (effect == 7) return 1120;
-  if (effect == 8) return 680;
-  if (effect == 9) return 900;
-  if (effect == 10) return 1100;
+  if (effect <= 10) return hapticLevelPulseMs(effect) + 40;
   if (effect >= 14 && effect <= 17) return 1100;
   if (effect >= 52 && effect <= 64) return 900;
   return HAPTIC_WAVEFORM_WAIT_MS;
+}
+
+bool playHapticRtpPulse(uint8_t effect) {
+  if (!ensureHapticDriver()) {
+    Serial.println("[HAPTIC] RTP skipped, DRV=FAIL");
+    return false;
+  }
+  if (effect == 0) {
+    Serial.println("[HAPTIC] RTP skipped, effect=0");
+    return false;
+  }
+
+  uint8_t drive = hapticLevelToDrive(effect);
+  configureHapticDriver();
+  drv.stop();
+  drv.setMode(DRV2605_MODE_REALTIME);
+  drv.setRealtimeValue(drive);
+  delay(hapticLevelPulseMs(effect));
+  drv.setRealtimeValue(0);
+  drv.stop();
+  drv.setMode(DRV2605_MODE_INTTRIG);
+  return true;
 }
 
 bool triggerHapticSequence(uint8_t effect, bool waitForFinish) {
@@ -462,22 +451,21 @@ bool triggerHapticSequence(uint8_t effect, bool waitForFinish) {
     return false;
   }
 
+  if (effect <= 10) {
+    return playHapticRtpPulse(effect);
+  }
+
   uint8_t waveform = hapticEffectToWaveform(effect);
   if (waveform == 0) {
     Serial.println("[HAPTIC] skipped, effect=0");
     return false;
   }
 
-  uint8_t followUp1 = hapticEffectToFollowUpWaveform(effect, 1);
-  uint8_t followUp2 = hapticEffectToFollowUpWaveform(effect, 2);
-
   configureHapticDriver();
   drv.stop();
   drv.setMode(DRV2605_MODE_INTTRIG);
   drv.setWaveform(0, waveform);
-  drv.setWaveform(1, followUp1);
-  drv.setWaveform(2, followUp2);
-  drv.setWaveform(3, 0);
+  drv.setWaveform(1, 0);
   drv.go();
 
   if (waitForFinish) {
@@ -500,43 +488,8 @@ bool playCommandHaptic(uint8_t effect) {
   return triggerHapticSequence(effect, true);
 }
 
-bool playHapticRtpPulse(uint8_t effect) {
-  if (!ensureHapticDriver()) {
-    Serial.println("[HAPTIC] RTP skipped, DRV=FAIL");
-    return false;
-  }
-  if (effect == 0) {
-    Serial.println("[HAPTIC] RTP skipped, effect=0");
-    return false;
-  }
-
-  uint8_t drive = (uint8_t)map(constrain(effect, 1, 10), 1, 10, 110, 255);
-  configureHapticDriver();
-  drv.stop();
-  drv.setMode(DRV2605_MODE_REALTIME);
-  drv.setRealtimeValue(drive);
-  delay(HAPTIC_RTP_PULSE_MS);
-  drv.setRealtimeValue(0);
-  drv.stop();
-  drv.setMode(DRV2605_MODE_INTTRIG);
-  return true;
-}
-
 bool runHapticTestSequence(uint8_t effect) {
-  uint8_t strongEffect = effect > 0 ? effect : 1;
-  bool ok = false;
-
-  ok = playHapticWaveform(1) || ok;
-  delay(120);
-  ok = playHapticWaveform(strongEffect) || ok;
-  delay(120);
-  ok = playHapticWaveform(47) || ok;
-  delay(120);
-  ok = playHapticWaveform(10) || ok;
-  delay(120);
-  ok = playHapticRtpPulse(7) || ok;
-
-  return ok;
+  return playHapticRtpPulse(effect);
 }
 
 bool isPressedRaw() {
@@ -816,9 +769,8 @@ void applyCommandStatus(String command, int effectFromCommand, bool allowCommand
     lastAction = "VIBE_CODE_DONE";
   } else if (command == "test_haptic") {
     lastAction = "TEST_HAPTIC";
-    int effect = effectFromCommand > 0 ? effectFromCommand : (alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1);
     if (allowCommandHaptic) {
-      runHapticTestSequence((uint8_t)effect);
+      runHapticTestSequence((uint8_t)effectFromCommand);
     }
   } else if (command == "stop_alarm") {
     stopAlarm();
@@ -843,10 +795,6 @@ void runPatternCommand(JsonVariantConst doc) {
   if (hapticMode == "") {
     hapticMode = (command == "notify_done" || command == "test_haptic") ? "on" : "off";
   }
-  if (hapticMode != "off" && effect == 0) {
-    effect = alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1;
-  }
-
   Serial.print("[CMD] run_pattern ");
   Serial.println(command);
 
@@ -912,8 +860,7 @@ void executeCommand(int commandId, String command, int effectFromCommand) {
     runLedTest();
   } else if (command == "test_haptic") {
     lastAction = "TEST_HAPTIC";
-    int effect = effectFromCommand > 0 ? effectFromCommand : (alarmConfig.hapticEffect > 0 ? alarmConfig.hapticEffect : 1);
-    runHapticTestSequence((uint8_t)effect);
+    runHapticTestSequence((uint8_t)effectFromCommand);
   } else if (command == "notify_done") {
     runDoneNotification(effectFromCommand);
   } else if (command == "codex_busy") {

@@ -81,6 +81,7 @@ lastCommandId
 ```
 
 `ledPairBrightness` controls LED A and LED B together. `flashLedBrightness` controls the separate flashing LED. Both use PWM on the ESP32-C3 LEDC peripheral.
+`hapticEffect` is a 0-10 strength setting for the DRV2605L realtime playback mode. Level 0 disables haptic output; levels 1-10 increase motor drive and pulse length.
 
 ## Wi-Fi Notes
 
