@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import subprocess
 import time
@@ -46,6 +47,52 @@ def normalize_state(state):
         "completed": "done",
     }
     return aliases.get(state, state)
+
+
+def notify_done_pattern(effect):
+    raw = os.environ.get("MCU_NOTIFY_DONE_PATTERN_JSON", "").strip()
+    if raw:
+        pattern = json.loads(raw)
+    else:
+        pattern = {
+            "command": "notify_done",
+            "green": "blink",
+            "red": "off",
+            "flash": "blink",
+            "haptic": "on",
+            "intervalMs": 180,
+            "count": 6,
+        }
+
+    pattern["command"] = "notify_done"
+    pattern["hapticEffect"] = effect
+    return pattern
+
+
+def estimate_pattern_timeout_ms(pattern):
+    count = max(1, int(pattern.get("count", 1) or 1))
+    interval_ms = max(50, int(pattern.get("intervalMs", 180) or 180))
+    haptic_on = pattern.get("haptic") != "off" and int(pattern.get("hapticEffect", 0) or 0) > 0
+    haptic_pulses = 0
+    if haptic_on:
+        haptic_pulses = count if pattern.get("haptic") == "on" else (count + 1) // 2
+    haptic_ms = haptic_pulses * 1300
+    return interval_ms * count + haptic_ms + 5000
+
+
+def command_for_state(state, effect, use_done_pattern):
+    if state == "busy":
+        return "codex_busy", "usb_command_ok", 2500
+    if state == "idle":
+        return "codex_idle", "usb_command_ok", 2500
+    if state == "keepalive":
+        return "usb_keepalive", "usb_keepalive_ok", 2500
+    if state == "done" and use_done_pattern:
+        pattern = notify_done_pattern(effect)
+        return f"run_pattern {json.dumps(pattern, separators=(',', ':'))}", "usb_pattern_ok", estimate_pattern_timeout_ms(pattern)
+    if state == "done":
+        return f"notify_done {effect}", "usb_command_ok", 10000
+    raise ValueError(f"Unsupported notification state: {state}")
 
 
 def ping_matcher(device_id):
@@ -170,16 +217,8 @@ def sync_usb_time(port):
     return reply
 
 
-def notify_usb(port, state, effect):
-    commands = {
-        "busy": "codex_busy",
-        "done": f"notify_done {effect}",
-        "idle": "codex_idle",
-        "keepalive": "usb_keepalive",
-    }
-    command = commands[state]
-    matcher = "usb_keepalive_ok" if state == "keepalive" else "usb_command_ok"
-    timeout_ms = 10000 if state == "done" else 2500
+def notify_usb(port, state, effect, use_done_pattern=True):
+    command, matcher, timeout_ms = command_for_state(state, effect, use_done_pattern)
     result = run_serial_command(
         port,
         command,
@@ -193,16 +232,8 @@ def notify_usb(port, state, effect):
     print(f"MCU notified by USB serial: {port} -> {command} ({reply})")
 
 
-def notify_usb_session(port, state, effect, sync_time_before_notify, device_id):
-    commands = {
-        "busy": "codex_busy",
-        "done": f"notify_done {effect}",
-        "idle": "codex_idle",
-        "keepalive": "usb_keepalive",
-    }
-    command = commands[state]
-    matcher = "usb_keepalive_ok" if state == "keepalive" else "usb_command_ok"
-    timeout_ms = 10000 if state == "done" else 2500
+def notify_usb_session(port, state, effect, sync_time_before_notify, device_id, use_done_pattern):
+    command, matcher, timeout_ms = command_for_state(state, effect, use_done_pattern)
     steps = [("codex_ping", ping_matcher(device_id), 1800)]
 
     if sync_time_before_notify and state in {"busy", "done"}:
@@ -236,11 +267,11 @@ def find_mcu_port(preferred_port):
     raise SystemExit(f"USB notify failed: no Codex MCU replied to codex_ping. {hint}")
 
 
-def notify_usb_auto(preferred_port, state, effect, sync_time_before_notify, device_id):
+def notify_usb_auto(preferred_port, state, effect, sync_time_before_notify, device_id, use_done_pattern):
     failures = []
     for port in serial_ports(preferred_port):
         try:
-            notify_usb_session(port, state, effect, sync_time_before_notify, device_id)
+            notify_usb_session(port, state, effect, sync_time_before_notify, device_id, use_done_pattern)
             return
         except Exception as exc:
             failures.append(f"{port}: {exc}")
@@ -248,6 +279,8 @@ def notify_usb_auto(preferred_port, state, effect, sync_time_before_notify, devi
                 break
 
     hint = "Close Arduino Serial Monitor/Plotter, plug in the MCU, or pass --port COMx."
+    if preferred_port and failures:
+        raise SystemExit(f"USB notify failed: {failures[-1]}. {hint}")
     raise SystemExit(f"USB notify failed: no Codex MCU accepted the notification. {hint}")
 
 
@@ -299,6 +332,7 @@ def main():
         default=os.environ.get("MCU_NOTIFY_STATE", "done"),
     )
     parser.add_argument("--effect", type=int, default=int(os.environ.get("MCU_NOTIFY_EFFECT", "10")), help="Haptic effect, 0-10")
+    parser.add_argument("--direct-done", action="store_true", default=env_bool("MCU_NOTIFY_DIRECT_DONE", False), help="Send notify_done directly instead of the done run_pattern")
     parser.add_argument("--no-sync-time", action="store_false", dest="sync_time", default=env_bool("MCU_SYNC_TIME_BEFORE_NOTIFY", True), help="Skip set_time before message-sent/busy or answer-done/done notification")
     args = parser.parse_args()
 
@@ -308,7 +342,7 @@ def main():
         sync_usb_time_auto(args.port, args.device_id)
         return
 
-    notify_usb_auto(args.port, state, effect, args.sync_time, args.device_id)
+    notify_usb_auto(args.port, state, effect, args.sync_time, args.device_id, not args.direct_done)
 
 
 if __name__ == "__main__":

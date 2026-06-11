@@ -30,5 +30,7 @@ The notifier uses auto-detected USB serial. Use only these local environment var
 - `MCU_NOTIFY_PORT`
 - `MCU_NOTIFY_DEVICE_ID`
 - `MCU_NOTIFY_EFFECT`
+- `MCU_NOTIFY_DIRECT_DONE`
+- `MCU_NOTIFY_DONE_PATTERN_JSON`
 
 Do not print the token. Do not commit real MCU URLs, Wi-Fi details, signing secrets, or local API tokens. If the notification command fails once, summarize the failure and stop.

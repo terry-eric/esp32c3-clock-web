@@ -60,9 +60,9 @@ The local notifier can sync time without the web console:
 python scripts\notify_mcu.py --mode usb --state sync-time
 ```
 
-Normal `message-sent`/`busy` and `answer-done`/`done` notifier commands also send `set_time` first unless `--no-sync-time` is passed. `message-sent` maps to `codex_busy`; `answer-done` maps to `notify_done`. The notifier requires the `codex_ping` reply to match the expected device id before it sends time or status commands.
+Normal `message-sent`/`busy` and `answer-done`/`done` notifier commands also send `set_time` first unless `--no-sync-time` is passed. `message-sent` maps to `codex_busy`; `answer-done` sends a `run_pattern` payload whose command is `notify_done`, so the local notifier uses the same blink style as the web console's done button. Pass `--direct-done` or set `MCU_NOTIFY_DIRECT_DONE=true` to send direct `notify_done` instead. The notifier requires the `codex_ping` reply to match the expected device id before it sends time or status commands.
 
-The console command buttons are editable. Button labels, command mappings, and light-pattern settings are saved in browser storage and reused for later clicks/page loads. MCU alarm/output settings are still persisted on the device through `set_config`.
+The console command buttons are editable. Button labels, command mappings, and light-pattern settings are saved in browser storage and reused for later clicks/page loads. Browser storage cannot be read by the Python notifier, so use `MCU_NOTIFY_DONE_PATTERN_JSON` in `.env` if the Codex/Gemini done alert should use a custom pattern outside the browser. MCU alarm/output settings are still persisted on the device through `set_config`.
 
 ## Command Behavior
 

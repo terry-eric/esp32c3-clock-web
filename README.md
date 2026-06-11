@@ -85,7 +85,7 @@ python scripts\notify_mcu.py --mode usb --state answer-done
 
 `message-sent` is an alias for the MCU busy light (`codex_busy`). `answer-done` is an alias for the done alert (`notify_done`). The older `busy` and `done` names still work.
 
-By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. Add `--no-sync-time` if you only want to send the status command. On fresh power-up, the MCU flashes the red time-sync prompt until USB time sync succeeds. After one successful sync, it does not keep blinking just because the previous sync became old.
+By default, the notifier sends `set_time` before `message-sent`/`busy` and `answer-done`/`done`, so Codex status notifications also refresh the MCU clock. `answer-done` uses `run_pattern` so it follows the same blink style as the web console's done command. Add `--direct-done` if you want the old direct `notify_done` command, or add `--no-sync-time` if you only want to send the status command. On fresh power-up, the MCU flashes the red time-sync prompt until USB time sync succeeds. After one successful sync, it does not keep blinking just because the previous sync became old.
 
 Optional local `.env`:
 
@@ -96,6 +96,8 @@ MCU_NOTIFY_DEVICE_ID=alarm_c3_001
 MCU_NOTIFY_EFFECT=10
 MCU_NOTIFY_STATE=answer-done
 MCU_SYNC_TIME_BEFORE_NOTIFY=true
+MCU_NOTIFY_DIRECT_DONE=false
+MCU_NOTIFY_DONE_PATTERN_JSON={"command":"notify_done","green":"blink","red":"off","flash":"blink","haptic":"on","intervalMs":180,"count":6}
 ```
 
 Leave `MCU_NOTIFY_PORT` empty to scan COM ports. The notifier only continues on a port whose `codex_ping` reply contains `MCU_NOTIFY_DEVICE_ID`, so it will not send alerts to unrelated serial devices. Set `MCU_NOTIFY_PORT` only if you want to force one port.

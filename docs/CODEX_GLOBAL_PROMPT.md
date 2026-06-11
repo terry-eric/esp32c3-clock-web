@@ -14,7 +14,7 @@ $env:MCU_NOTIFY_EFFECT="10"
 $env:MCU_NOTIFY_STATE="answer-done"
 ```
 
-Leave `MCU_NOTIFY_PORT` empty to scan COM ports. The notifier only sends commands after `codex_ping` returns the expected `MCU_NOTIFY_DEVICE_ID`.
+Leave `MCU_NOTIFY_PORT` empty to scan COM ports. The notifier only sends commands after `codex_ping` returns the expected `MCU_NOTIFY_DEVICE_ID`. `answer-done` uses the done `run_pattern` by default; set `MCU_NOTIFY_DONE_PATTERN_JSON` in the project `.env` to customize that pattern for local Codex/Gemini notifications.
 
 ## Slash Prompt
 

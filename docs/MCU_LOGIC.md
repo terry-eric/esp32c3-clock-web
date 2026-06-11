@@ -56,7 +56,7 @@ run_pattern {"command":"notify_done","green":"blink","red":"off","flash":"blink"
 `usb_keepalive` keeps the serial session active. On fresh power-up, if MCU time is invalid and no USB time sync has succeeded yet, the MCU blinks the red time-sync prompt. After one successful sync, stale time does not make it blink forever.
 `get_config` returns the current MCU config so the web console can use the device values as defaults after connecting.
 `run_pattern` runs editable green/red/flash LED and haptic behavior with configurable mode, interval, and count.
-`codex_busy` shows solid red while Codex is working. `notify_done` clears busy, flashes/vibrates, then shows solid green. `codex_idle` clears the Codex status light. In `scripts/notify_mcu.py`, `message-sent` maps to `codex_busy` and `answer-done` maps to `notify_done`, so Codex can alert once after receiving a prompt and again after finishing the answer.
+`codex_busy` shows solid red while Codex is working. `notify_done` clears busy, flashes/vibrates, then shows solid green. `codex_idle` clears the Codex status light. In `scripts/notify_mcu.py`, `message-sent` maps to `codex_busy` and `answer-done` sends `run_pattern` with command `notify_done`, so Codex can alert once after receiving a prompt and again after finishing the answer with the same blink path used by the web console.
 `set_config` applies the provided alarm/output fields, clamps safe ranges, and writes changed settings to NVS.
 `set_time` sets the MCU clock from Unix epoch seconds provided by the browser/computer over USB. The web console opens USB only for the current action, sends time/config/command data as needed, then closes the port again so local Codex/Gemini notifications can use the same COM port.
 
